@@ -67,6 +67,12 @@ def reset_clocks():
 
 # --------------------------------------------------------------------------
 def dormancy(mac: str) -> bool:
+    """Always False since v0.9 — rifts no longer wink out when a device leaves
+    the network. Kept so callers and saved data keep working."""
+    return False
+
+
+def _legacy_dormancy(mac: str) -> bool:
     """Is this rift's device currently off the network? Unknown MACs count as
     awake so manually-added rifts are playable."""
     dev = db.get_device(mac)
@@ -314,7 +320,7 @@ def _run():
             war.tick_signal(now)
             war.tick_deadlines(now)
             if now - last_presence > PRESENCE_EVERY:
-                check_presence(now)
+                pass          # presence policing retired in v0.9
                 last_presence = now
         except Exception:  # noqa: BLE001 — the heartbeat must never die
             pass

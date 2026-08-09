@@ -162,7 +162,7 @@ class Sim:
             if self.keep_online:
                 for mac in self.online_macs:
                     self.db.touch_device(mac)
-            self.ticker.check_presence(now)
+            # presence policing retired in v0.9 — rifts stay resolved
         self._step_count += 1
 
     def run(self, days: float = 7.0, step_minutes: float = 10.0,

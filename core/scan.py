@@ -139,3 +139,23 @@ def mock_devices() -> list[dict]:
     ]
     return [{"mac": m, "hostname": h, "ip": ip, "vendor": vendor_for(m)}
             for m, h, ip in sample]
+
+
+# ---------------------------------------------------------- deep signals ----
+# Your LAN is finite; the Array is not. Once every real device has been
+# resolved, further upgrades pull rifts out of open subspace. They're seeded
+# exactly like device rifts — the MAC is just synthesised rather than sniffed —
+# so they get the same deterministic worlds, and because their OUIs are random
+# they spread across all six biomes. That quietly fixes the old problem where a
+# LAN with no Bazaar device could never produce Plasma.
+from .seed import Rng, _digest
+
+
+def deep_signal(index: int) -> dict:
+    r = Rng(_digest("aether.deepsignal", str(index)))
+    # AE: locally-administered prefix, won't collide with a real vendor block
+    mac = "AE:" + ":".join(f"{r.randint(0, 255):02X}" for _ in range(5))
+    return {"mac": mac,
+            "hostname": f"deep-signal-{index + 1:02d}",
+            "ip": "",
+            "vendor": "Deep Signal"}

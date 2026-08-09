@@ -48,6 +48,13 @@ FACILITIES = {
         "desc": "Deep pressure conditioning. Gains HP.",
         "base_bits": 200,
     },
+    "array": {
+        "name": "The Array", "kind": "support", "essence": "ferro",
+        "desc": "A listening tower aimed at subspace. Each level resolves more "
+                "distant rifts out of the noise — and once a rift is found it "
+                "stays found.",
+        "base_bits": 400,
+    },
     "hatchery_wing": {
         "name": "Hatchery Wing", "kind": "support", "essence": "plasma",
         "desc": "Warm coils around the eggs. Each level incubates 6% faster.",
@@ -79,9 +86,25 @@ HALLS = {k: v for k, v in FACILITIES.items() if v["kind"] == "hall"}
 
 
 # ----------------------------------------------------------------- levels ---
+ARRAY_BASE_SLOTS = int(os.environ.get("AETHER_ARRAY_BASE", "3"))
+ARRAY_PER_LEVEL = int(os.environ.get("AETHER_ARRAY_PER_LEVEL", "2"))
+
+
+def array_capacity(level: int) -> int:
+    """How many rifts you can have resolved at once."""
+    return ARRAY_BASE_SLOTS + ARRAY_PER_LEVEL * level
+
+
 def upgrade_cost(key: str, level: int) -> dict:
     f = FACILITIES[key]
     scale = 1.55 ** level
+    if key == "array":
+        # Bits-only for the first few levels: the Array is how you reach the
+        # essences you don't have yet, so it must never be gated behind one.
+        cost = {"bits": round(f["base_bits"] * (1.75 ** level), 1)}
+        if level >= 3:
+            cost["cores"] = float(level - 2)
+        return cost
     cost = {"bits": round(f["base_bits"] * scale, 1),
             f"essence.{f['essence']}": round(f["base_bits"] / 8 * scale, 1)}
     if level >= 4:                      # cores join the bill at level 5+
@@ -131,10 +154,13 @@ def snapshot() -> dict:
 
 def effect_line(key: str, lvl: int) -> str:
     if lvl == 0:
-        return "not built"
+        return (f"not built · {array_capacity(0)} rifts resolvable"
+                if key == "array" else "not built")
     f = FACILITIES[key]
     if f["kind"] == "hall":
         return f"{hall_slots(lvl)} slot(s) · +{hall_rate(lvl):.1f} {f['stat'].upper()}/h"
+    if key == "array":
+        return f"{array_capacity(lvl)} rifts resolvable"
     if key == "hatchery_wing":
         return f"incubation ×{incubation_mult():.2f}"
     if key == "auto_feeder":

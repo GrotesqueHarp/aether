@@ -458,7 +458,7 @@ async function scanView(){
       <div><div class="eyebrow">Local subspace</div><h1>Rifts on your network</h1></div>
       <div style="display:flex;gap:9px">
         <button class="btn" id="manual">Add device</button>
-        <button class="btn primary" id="scan">Scan network</button>
+        <button class="btn primary" id="scan">Sweep with the Array</button>
       </div>
     </div>
     <div id="scanmeta" class="muted mono" style="font-size:12px;margin-bottom:14px"></div>
@@ -468,7 +468,7 @@ async function scanView(){
   const known=await api('/api/devices');
   if(known.devices && known.devices.length){
     state.devices=known.devices;
-    $('#scanmeta').textContent=`${known.devices.length} known device(s) · presence updates live`;
+    $('#scanmeta').textContent=`${known.devices.length} rift(s) resolved`;
     await hydrateRifts();renderRifts();
   } else {
     runScan(true);
@@ -507,7 +507,7 @@ function renderRifts(){
           <h3>${r.world_name}</h3>
           <div class="host">${r.hostname}</div>
           <div class="meta">
-            <span class="chip ${dorm?'dormant-chip':'online-chip'}"><span class="pulse-dot ${dorm?'off':'on'}"></span>${dorm?'dormant':'awake'}</span>
+            <span class="chip ${dorm?'dormant-chip':'online-chip'}"><span class="pulse-dot ${dorm?'off':'on'}"></span>resolved</span>
             ${prog.tier?`<span class="tier-chip">T${prog.tier}</span>`:''}
             ${d.rift.incursion?`<span class="inc-badge">⚠ NULL ${Math.ceil(d.rift.incursion.seconds_left/3600)}h</span>`:''}
             <span class="chip">${r.biome.name}</span>${r.vendor?`<span class="chip">${r.vendor}</span>`:''}
@@ -556,7 +556,7 @@ async function riftView(dev){
       <div><div class="eyebrow" style="color:${col}">${r.biome.name} · ${r.biome.mood}</div>
       <h1>${r.world_name} ${r.progress.tier?`<span class="tier-chip">TIER ${r.progress.tier}</span>`:''} ${r.progress.ward?`<span class="tier-chip" style="color:#7FCBEB;border-color:#2a4a5e">WARD ${r.progress.ward}</span>`:''}</h1>
       <div class="mono muted" style="font-size:12px;margin-top:4px">
-        <span class="pulse-dot ${r.dormant?'off':'on'}"></span>${r.dormant?'DORMANT — device off-network. Enemies +3 Lv, drifting Umbra, XP ×1.35':'awake'} · ${r.hostname} · ${r.mac}${r.vendor?' · '+r.vendor:''}
+        <span class="pulse-dot ${r.dormant?'off':'on'}"></span>resolved · ${r.hostname} · ${r.mac}${r.vendor?' · '+r.vendor:''}
       </div></div>
       <button class="btn ghost" onclick="go('scan')">← All rifts</button>
     </div>
@@ -631,7 +631,7 @@ function renderDescent(r){
     const cls=st==='cleared'?'done':st==='frontier'?'front':'locked';
     const tags=[
       L.is_gatekeeper?'<span class="ltag gk">GATEKEEPER</span>':'',
-      L.capture_layer?'<span class="ltag cap">SHELF · capture</span>':'',
+      L.capture_layer?'<span class="ltag cap">CAPTURE</span>':(L.harvest_shelf?'<span class="ltag cap">SHELF</span>':''),
       L.foes>1?`<span class="ltag">${L.foes} foes</span>`:''
     ].join('');
     return `<div class="layer ${cls}" data-layer="${L.layer}">
@@ -645,7 +645,8 @@ function renderDescent(r){
 
   // shelves: every cleared multiple of 10 is a harvest post
   const shelves=[];
-  for(let L=10;L<=depth;L+=10){
+  const shelfEvery=r.harvest_every||5;
+  for(let L=shelfEvery;L<=depth;L+=shelfEvery){
     const hv=r.harvests&&r.harvests[String(L)];
     let inner;
     if(hv){

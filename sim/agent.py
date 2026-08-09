@@ -309,7 +309,7 @@ class PlayerPolicy(Policy):
         # harvest posts sit on shelves — every 10th cleared layer. Deeper
         # shelves pay far more, so fill from the bottom up.
         open_nodes = []
-        step = sim.world.CAPTURE_EVERY
+        step = sim.world.HARVEST_EVERY
         for dev in sim.db.list_devices():
             mac = dev["mac"]
             prog = sim.db.get_progress(mac)
@@ -491,7 +491,10 @@ class PlayerPolicy(Policy):
         # six rifts is not something you hand-fight. Keep one running
         # everywhere we can afford to.
         free = [d for d in self._roster(sim) if not self._busy(sim, d)]
-        if not free:
+        # Keep a daemon home unless the roster can spare one. Dispatching your
+        # only daemon leaves nothing to fight, nothing to post on a shelf, and
+        # no way to earn the egg that would fix either.
+        if len(sim.db.list_daemons()) < 2 or not free:
             return
         for dev in sim.db.list_devices():
             if not self._budget():

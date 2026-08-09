@@ -97,6 +97,10 @@ def _stage_for_level(lvl: int) -> str:
 LAYERS = 100
 GATEKEEPER_EVERY = 25
 CAPTURE_EVERY = 10
+# Harvest posts are twice as common as capture shelves. Income is meant to come
+# from posted daemons, so the first post has to be reachable by a lone starter
+# — otherwise there's nothing to fund the second daemon with.
+HARVEST_EVERY = 5
 
 
 def is_gatekeeper(layer: int) -> bool:
@@ -109,8 +113,15 @@ def foes_at(layer: int) -> int:
     return 1 + min(3, max(0, (layer - 1) // 30))
 
 
+def is_harvest_shelf(layer: int) -> bool:
+    return layer % HARVEST_EVERY == 0
+
+
 def layer_level(depth: int, layer: int, tier: int = 0) -> int:
-    base = depth + layer * (0.75 + depth * 0.06)
+    # gentle opening: the first ten layers ramp in, so a starter daemon can
+    # reach its first harvest post without a party
+    ramp = 0.45 + 0.055 * min(layer, 10)
+    base = depth + layer * (0.75 + depth * 0.06) * ramp
     return max(1, round(base * (1 + 0.35 * tier)) + tier * 5)
 
 
@@ -153,6 +164,7 @@ def layer_spec(mac: str, layer: int, tier: int = 0) -> dict:
         "enemy_level": lvl,
         "foes": foes_at(layer),
         "capture_layer": layer % CAPTURE_EVERY == 0,
+        "harvest_shelf": is_harvest_shelf(layer),
         "reward_xp": int((10 + lvl * 4 + (80 if boss else 0)) * (1 + 0.4 * tier)),
     }
 

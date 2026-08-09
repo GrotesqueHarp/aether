@@ -32,7 +32,8 @@ ESSENCE_KINDS = sorted(set(ESSENCE_BY_BIOME.values()))  # ferro/loam/plasma/tide
 ELEMENT_FOR_ESSENCE = {v: content.BIOMES[k]["elements"][0]
                        for k, v in ESSENCE_BY_BIOME.items()}
 
-DORMANT_RATE_MULT = 0.6   # offline devices harvest slower...
+LOOT_MULT = float(os.environ.get("AETHER_LOOT_MULT", "1.0"))
+DORMANT_RATE_MULT = 1.0   # retained for signature compatibility; presence is gone   # offline devices harvest slower...
                           # ...but yield umbra essence instead of their biome's
 
 
@@ -52,7 +53,7 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     mult = (ECON_MULT * (DORMANT_RATE_MULT if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
 
-    bits_hr = (3.0 + depth_factor * 1.5) * power_factor * mult
+    bits_hr = (6.0 + depth_factor * 3.2) * power_factor * mult
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
     out = {"bits": bits_hr, f"essence.{essence_kind}": bits_hr / 10.0}
     if is_gatekeeper(layer):
@@ -89,10 +90,13 @@ def node_loot(rift: dict, node_index: int, dormant: bool,
     mult = (ECON_MULT * (1.35 if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
-    loot = {"bits": round((20 + lvl * 6) * mult, 1),
-            f"essence.{essence_kind}": round((3 + lvl) * mult, 1)}
+    # Clearing a layer is progress, not payday. Battle drops are a trickle to
+    # get you started; the real economy is a daemon posted on a shelf pulling
+    # resources in around the clock whether you're watching or not.
+    loot = {"bits": round((3 + lvl * 0.7) * mult * LOOT_MULT, 1),
+            f"essence.{essence_kind}": round((0.5 + lvl * 0.15) * mult * LOOT_MULT, 1)}
     if is_gatekeeper(layer):
-        loot["cores"] = round(2.0 * (1 + progress.get("tier", 0) * 0.5), 1)
+        loot["cores"] = round(0.5 * (1 + progress.get("tier", 0) * 0.5), 1)
     return loot
 
 

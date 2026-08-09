@@ -207,21 +207,59 @@ def devices():
 
 @app.route("/api/scan")
 def do_scan():
-    if request.args.get("mock") == "1":
-        devs = scan.mock_devices()
-        meta = {"subnet": "192.168.1.0/24 (mock)", "swept": False, "mock": True}
+    """Resolve rifts, up to what the Array can currently hold.
+
+    Real devices on your network are resolved first — they make the most
+    characterful worlds. Once they're exhausted, further Array levels pull
+    rifts out of open subspace instead, so discovery is never capped by how
+    much hardware you happen to own.
+    """
+    cap = bastion.array_capacity(db.facility_level("array"))
+    known = {d["mac"] for d in db.list_devices()}
+    found = []
+
+    if len(known) < cap:
+        if request.args.get("mock") == "1":
+            devs = scan.mock_devices()
+            meta = {"subnet": "192.168.1.0/24 (mock)", "swept": False, "mock": True}
+        else:
+            result = scan.discover(do_sweep=request.args.get("sweep", "1") == "1")
+            devs, meta = result["devices"], result["meta"]
+        for d in devs:
+            if d["mac"] in known:
+                db.upsert_device(d["mac"], d.get("hostname", ""), d.get("ip", ""),
+                                 d.get("vendor", ""), online=True)
+                continue
+            if len(known) >= cap:
+                break
+            db.upsert_device(d["mac"], d.get("hostname", ""), d.get("ip", ""),
+                             d.get("vendor", ""), online=True)
+            known.add(d["mac"])
+            found.append(d["mac"])
     else:
-        result = scan.discover(do_sweep=request.args.get("sweep", "1") == "1")
-        devs, meta = result["devices"], result["meta"]
-    for d in devs:
-        known = db.get_device(d["mac"])
-        db.upsert_device(d["mac"], d.get("hostname", ""), d.get("ip", ""),
-                         d.get("vendor", ""), online=True)
-        if not known:
-            db.add_event("rift_found",
-                         f"New rift discovered: {generate_rift(d['mac'])['world_name']} "
-                         f"({d.get('hostname') or d['mac']}).", mac=d["mac"])
-    return jsonify({"devices": db.list_devices(), "meta": meta})
+        meta = {"subnet": "", "swept": False, "at_capacity": True}
+
+    # fill any remaining Array capacity from subspace
+    idx = 0
+    while len(known) < cap and idx < 500:
+        d = scan.deep_signal(idx)
+        idx += 1
+        if d["mac"] in known:
+            continue
+        db.upsert_device(d["mac"], d["hostname"], d["ip"], d["vendor"], online=True)
+        known.add(d["mac"])
+        found.append(d["mac"])
+
+    for mac in found:
+        db.add_event("rift_found",
+                     f"The Array resolved a new rift: "
+                     f"{generate_rift(mac)['world_name']}.", mac=mac)
+
+    meta["capacity"] = cap
+    meta["resolved"] = len(known)
+    meta["at_capacity"] = len(known) >= cap
+    return jsonify({"devices": db.list_devices(), "meta": meta,
+                    "found": len(found), "capacity": cap})
 
 
 @app.route("/api/device/manual", methods=["POST"])
@@ -254,7 +292,7 @@ def rift(mac):
         r["hostname"] = dev["hostname"] or r["hostname"]
     r["progress"] = db.get_progress(r["mac"])
     r["online"] = (not dev) or bool(dev["online"])
-    r["dormant"] = bool(dev) and not dev["online"]
+    r["dormant"] = False        # rifts stay resolved once the Array finds them
     prog = r["progress"]
     r["window"] = world_mod.layer_window(r["mac"], prog["cleared"], prog["tier"])
     for spec in r["window"]:
@@ -268,6 +306,7 @@ def rift(mac):
     r["next_capture_layer"] = min(world_mod.LAYERS,
         (prog["captures_taken"] + 1) * world_mod.CAPTURE_EVERY)
     r["fully_cleared"] = prog["cleared"] >= world_mod.LAYERS
+    r["harvest_every"] = world_mod.HARVEST_EVERY
     r["overclock_cost"] = war.overclock_cost(r["progress"]["tier"])
     r["next_tier_boss_power"] = war.next_tier_boss_power(r["mac"])
     r["can_downclock"] = r["progress"]["tier"] > 0
@@ -488,7 +527,7 @@ def capture():
                           scan.vendor_for(body.get("mac")))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    if ticker.dormancy(r["mac"]):
+    if False:
         return jsonify({"error": "rift_dormant",
                         "message": "The rift is dormant — its device is off "
                                    "the network. Nothing can be drawn out "

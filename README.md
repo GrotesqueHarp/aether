@@ -179,6 +179,29 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## The Array, and where resources come from (v0.9)
+
+**Presence is gone.** Rifts no longer wink out when a device leaves your
+network — nothing goes dormant, and a rift you've found stays found forever.
+
+**Discovery is a facility.** The Array is a listening tower: each level
+resolves more rifts out of the noise. Real devices on your LAN are resolved
+first, since they make the most characterful worlds; once they're exhausted,
+further levels pull **deep-signal rifts** out of open subspace. Those get
+synthesised MACs, so they're seeded exactly like device rifts and spread across
+all six biomes — which permanently fixes the old problem where a LAN without a
+Bazaar device could never produce Plasma. The Array costs Bits only at low
+levels, since it's the thing that gets you the essences you're missing.
+
+**Harvesting is the economy.** Clearing a layer is progress, not payday —
+battle drops were cut to roughly a sixth, while harvest rates roughly doubled.
+A posted daemon out-earns an entire layer clear in about sixteen minutes, and
+keeps doing it while you're away.
+
+**Harvest posts every 5 layers** (captures stay every 10), and the first ten
+layers ramp in gently, so a lone starter daemon can reach its first post and
+fund its first egg without a party.
+
 ## Refreshing (v0.8.4)
 
 The page updates on two triggers, and there is no blind redraw timer:
