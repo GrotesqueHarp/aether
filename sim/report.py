@@ -35,7 +35,7 @@ MILESTONES = [
 
 # progress = nodes cleared, with a tier counting as a full lap of the rift
 def progress_score(snap: dict) -> float:
-    return sum(v["cleared"] + v["tier"] * 8 for v in snap["rifts"].values())
+    return sum(v["cleared"] + v["tier"] * 100 for v in snap["rifts"].values())
 
 
 def milestones(sim: Sim) -> list[tuple[str, str, float | None]]:

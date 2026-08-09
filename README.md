@@ -179,6 +179,31 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Automation over clicking (v0.8.1)
+
+The point of the game is building machines that play it, not tapping buttons.
+
+- **Manual training is deliberately marginal.** One stat point, costing 35
+  energy — roughly four hours of idle recovery per click. A level-1 training
+  hall already beats it 4×; a level-10 hall beats it ~500×.
+- **Training halls compound.** Rates went multiplicative (×1.40/level) instead
+  of additive. Upgrade costs grow ~1.55×/level, so a linear payoff meant every
+  level bought less than the last and the halls quietly stopped mattering.
+  L1 ≈ 24 stat points/day, L10 ≈ 500.
+- **Care maintains itself.** The Auto-Feeder now *restores* hunger rather than
+  merely slowing the drain — slowing a drain still ends at zero, so clicking
+  Feed was mandatory forever. With the Playroom floor, the Cleansing Font, and
+  passive energy recovery, all four meters can be fully automated.
+- **Posted daemons settle at an energy floor** instead of bottoming out. Flat
+  drain meant assigning your best daemon to a shelf permanently disabled it
+  for combat.
+- **Expeditions are the descent engine.** 100 layers across six rifts is not
+  something you hand-fight; expeditions dig continuously while you're away.
+
+Simulated over 21 days this removed every stall (20 frozen days → 0), took
+party power from 1,077 to 7,030, and moved first hall training from day 10.7
+to day 1.3.
+
 ## The descent (v0.8) — rifts are shafts, not corridors
 
 A rift used to be 4–7 nodes ending in a Gatekeeper. It's now **100 layers**

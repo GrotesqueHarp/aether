@@ -138,7 +138,8 @@ def effect_line(key: str, lvl: int) -> str:
     if key == "hatchery_wing":
         return f"incubation ×{incubation_mult():.2f}"
     if key == "auto_feeder":
-        return f"hunger drift ×{hunger_drift_mult():.2f}"
+        return (f"hunger drift ×{hunger_drift_mult():.2f}, "
+                f"+{feeder_restore_per_hour():.0f} hunger/h")
     if key == "playroom":
         return f"happiness floor {happiness_floor()}"
     if key == "cleansing_font":
@@ -153,9 +154,18 @@ def hall_slots(lvl: int) -> int:
     return 0 if lvl == 0 else 1 + (lvl - 1) // 3
 
 
+HALL_BASE = float(os.environ.get("AETHER_HALL_BASE", "1.0"))
+HALL_GROWTH = float(os.environ.get("AETHER_HALL_GROWTH", "1.40"))
+
+
 def hall_rate(lvl: int) -> float:
-    """Permanent base-stat points per hour."""
-    return 0.0 if lvl == 0 else (0.8 + 0.35 * lvl) * TRAIN_MULT
+    """Permanent base-stat points per hour.
+
+    Multiplicative, not additive. Upgrade costs grow ~1.55x per level, so a
+    linear payoff meant every level bought less than the last and the halls
+    quietly stopped mattering. Now investment compounds: L1 is ~24 points a
+    day, L10 is ~500."""
+    return 0.0 if lvl == 0 else HALL_BASE * (HALL_GROWTH ** (lvl - 1)) * TRAIN_MULT
 
 
 def assign(daemon_id: int, hall: str) -> dict:
@@ -206,6 +216,14 @@ def tick_training(now: float | None = None):
 # ------------------------------------------------- automation drift effects --
 def hunger_drift_mult() -> float:
     return max(0.15, 1 - 0.12 * db.facility_level("auto_feeder"))
+
+
+def feeder_restore_per_hour() -> float:
+    """The Auto-Feeder doesn't just slow hunger, it puts food out. Slowing a
+    drain still ends at zero eventually; only restoration removes the need to
+    click Feed forever. From ~L2 it outpaces the drift entirely."""
+    lvl = db.facility_level("auto_feeder")
+    return 0.0 if lvl == 0 else 6.0 * lvl
 
 
 def happiness_floor() -> int:

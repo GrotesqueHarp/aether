@@ -418,7 +418,7 @@ def battle():
         for d in party:
             d.wins += 1
             levels += d.gain_xp(xp_each)["levels"]
-            d.care["energy"] = max(0, d.care["energy"] - 8)
+            d.care["energy"] = max(0, d.care["energy"] - 5)
             db.save_daemon(d)
         reward["xp"] = xp_each
         reward["levels"] = levels

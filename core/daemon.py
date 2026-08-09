@@ -27,6 +27,10 @@ CARE_DEFAULTS = {
     "weight": 20,      # affects SPD; overfeeding raises it
 }
 
+# Manual training is intentionally weak — see Daemon.train
+TRAIN_ENERGY_FLOOR = 40      # must be well rested to hand-train at all
+TRAIN_ENERGY_COST = 35       # ~4 hours of idle recovery per click
+
 STAT_KEYS = ["hp", "atk", "def", "spd"]
 
 
@@ -179,20 +183,22 @@ class Daemon:
         self._clamp()
 
     def train(self, stat: str) -> dict:
-        """Trade energy for a permanent base-stat gain + discipline + xp."""
+        """Hand-training a daemon. Deliberately marginal: one point, and it
+        costs most of a rested daemon's energy, so a click buys roughly four
+        hours of idle recovery. The training halls exist to make this
+        obsolete — clicking should never be the efficient path."""
         if stat not in STAT_KEYS:
             return {"ok": False, "reason": "bad_stat"}
-        if self.care["energy"] < 15:
+        if self.care["energy"] < TRAIN_ENERGY_FLOOR:
             return {"ok": False, "reason": "too_tired"}
-        r = Rng(_digest(self.seed, "train", stat, str(self.level), str(self.xp)))
-        gain = r.randint(1, 3) + (self.rarity // 2)
+        gain = 1
         self.base_stats[stat] += gain
-        self.care["energy"] -= 18
+        self.care["energy"] -= TRAIN_ENERGY_COST
         self.care["discipline"] += 6
         self.care["happiness"] -= 3
         self.care["hunger"] -= 8
         self._clamp()
-        ev = self.gain_xp(8 + self.level)
+        ev = self.gain_xp(4 + self.level // 2)
         return {"ok": True, "stat": stat, "gain": gain, "xp": ev}
 
     # ---- serialization -------------------------------------------------------

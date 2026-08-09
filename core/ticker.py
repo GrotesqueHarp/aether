@@ -45,6 +45,11 @@ DRIFT_PER_HOUR = {"hunger": -14, "energy": -10, "happiness": -6,
 # own; working daemons still burn it, just slowly. Idling is how you recover.
 ENERGY_REGEN = float(os.environ.get("AETHER_ENERGY_REGEN", "9"))    # idle, /hr
 ENERGY_WORK_DRAIN = float(os.environ.get("AETHER_ENERGY_WORK", "-3.5"))  # posted
+# A posted daemon settles toward this rather than bottoming out. Flat drain
+# meant anything assigned to a shelf or hall sank to zero and stayed there —
+# permanently too tired to fight — so posting your best daemons quietly
+# disabled them. Work is tiring, not ruinous.
+ENERGY_WORK_FLOOR = float(os.environ.get("AETHER_ENERGY_WORK_FLOOR", "60"))
 
 # journal warning cooldowns: (daemon_id, kind) -> last ts
 _warned: dict[tuple, float] = {}
@@ -84,6 +89,7 @@ def apply_drift(now: float | None = None):
     if hours < 0.002:
         return
     hunger_mult = bastion.hunger_drift_mult()
+    feed_rate = bastion.feeder_restore_per_hour()
     hap_floor = bastion.happiness_floor()
     corr_drain = bastion.corruption_drain_per_hour()
     for d in db.list_daemons():
@@ -91,10 +97,21 @@ def apply_drift(now: float | None = None):
                        or db.get_expedition(d.id))
         for k, per in DRIFT_PER_HOUR.items():
             if k == "energy":
-                rate = ENERGY_WORK_DRAIN if working else ENERGY_REGEN
+                if working:
+                    # converge on the working floor from either direction
+                    rate = (ENERGY_WORK_DRAIN if d.care["energy"] > ENERGY_WORK_FLOOR
+                            else abs(ENERGY_WORK_DRAIN))
+                else:
+                    rate = ENERGY_REGEN
+            elif k == "hunger":
+                rate = per * hunger_mult + feed_rate
             else:
-                rate = per * (hunger_mult if k == "hunger" else 1.0)
-            d.care[k] = max(0, min(100, d.care[k] + rate * hours))
+                rate = per
+            nxt = d.care[k] + rate * hours
+            if k == "energy" and working:
+                nxt = (max(ENERGY_WORK_FLOOR, nxt) if rate < 0
+                       else min(ENERGY_WORK_FLOOR, nxt))
+            d.care[k] = max(0, min(100, nxt))
         if corr_drain:
             d.care["corruption"] = max(0, d.care["corruption"] - corr_drain * hours)
         if hap_floor:

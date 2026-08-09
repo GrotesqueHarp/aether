@@ -38,41 +38,53 @@ BUILD_ORDERS = {
 
 
 # --------------------------------------------------------------- forecasting
-def odds_vs_tier(sim, party: list[Daemon], mac: str, tier: int,
-                 trials: int = 15) -> float:
-    """Could this party beat the Gatekeeper if the rift were at `tier`?
-    Used to look one Overclock ahead before committing to it."""
-    if not party:
+def _foes_on(sim, mac: str, layer: int, tier: int | None = None) -> list:
+    """The pack standing on a layer, dormancy applied. Layers are generated on
+    demand, so this is the only place the sim needs to know about them."""
+    prog = sim.db.get_progress(mac)
+    t = prog["tier"] if tier is None else tier
+    foes = sim.world.layer_enemies(mac, layer, t)
+    if sim.ticker.dormancy(mac):
+        foes = [sim.ticker.dormant_enemy(f) for f in foes]
+    return foes
+
+
+def battle_odds(sim, party: list[Daemon], mac: str, layer: int,
+                trials: int = 15) -> float:
+    """Win probability for this party on this layer, right now. Each attempt
+    in the real game re-seeds the fight, so this is really 'what fraction of
+    the seed space do we win' — i.e. roughly how many tries it will take."""
+    if not party or layer < 1 or layer > sim.world.LAYERS:
         return 0.0
-    rift = sim.world.generate_rift(mac)
-    boss = sim.war.scale_enemy(
-        Daemon.from_dict(rift["nodes"][-1]["enemy"]), {"tier": tier})
-    foes = [boss] + sim.war.boss_minions(boss, rift, {"tier": tier})
-    wins = sum(simulate_team(party, foes, seed_extra=f"peek:{tier}:{i}"
+    foes = _foes_on(sim, mac, layer)
+    wins = sum(simulate_team(party, foes, seed_extra=f"odds:{layer}:{i}"
                              )["winner"] == "a" for i in range(trials))
     return wins / trials
 
 
-def battle_odds(sim, party: list[Daemon], mac: str, node_index: int,
-                trials: int = 21) -> float:
-    """Win probability for this party against this node, right now."""
+def odds_vs_tier(sim, party: list[Daemon], mac: str, tier: int,
+                 layer: int | None = None, trials: int = 11) -> float:
+    """Could this party handle the shaft if it were at `tier`? Measured at the
+    first Gatekeeper, which is the real gate on a fresh descent."""
     if not party:
         return 0.0
-    rift = sim.world.generate_rift(mac)
-    if node_index >= len(rift["nodes"]):
+    layer = layer or sim.world.GATEKEEPER_EVERY
+    foes = sim.world.layer_enemies(mac, layer, tier)
+    wins = sum(simulate_team(party, foes, seed_extra=f"peek:{tier}:{layer}:{i}"
+                             )["winner"] == "a" for i in range(trials))
+    return wins / trials
+
+
+def battle_odds(sim, party: list[Daemon], mac: str, layer: int,
+                trials: int = 15) -> float:
+    """Win probability for this party on this layer, right now."""
+    if not party or layer < 1 or layer > sim.world.LAYERS:
         return 0.0
     prog = sim.db.get_progress(mac)
-    node = rift["nodes"][node_index]
-
-    enemy = Daemon.from_dict(node["enemy"])
+    foes = sim.world.layer_enemies(mac, layer, prog["tier"])
     if sim.ticker.dormancy(mac):
-        enemy = sim.ticker.dormant_enemy(enemy)
-    enemy = sim.war.scale_enemy(enemy, prog)
-    foes = [enemy]
-    if node["is_boss"]:
-        foes += sim.war.boss_minions(enemy, rift, prog)
-
-    wins = sum(simulate_team(party, foes, seed_extra=f"odds:{node_index}:{i}"
+        foes = [sim.ticker.dormant_enemy(f) for f in foes]
+    wins = sum(simulate_team(party, foes, seed_extra=f"odds:{layer}:{i}"
                              )["winner"] == "a" for i in range(trials))
     return wins / trials
 
@@ -87,6 +99,7 @@ class PlayerPolicy(Policy):
                  strategy: str = "balanced",
                  use_expeditions: bool = True, use_crucible: bool = True,
                  crucible_reserve: float = 0.6,
+                 max_dig_per_session: int = 30,
                  overclock_lookahead: float = 0.5,
                  use_downclock: bool = True,
                  max_roster: int = 8,
@@ -102,6 +115,7 @@ class PlayerPolicy(Policy):
         self.use_expeditions = use_expeditions
         self.use_crucible = use_crucible
         self.crucible_reserve = crucible_reserve
+        self.max_dig_per_session = max_dig_per_session
         self.overclock_lookahead = overclock_lookahead
         self.use_downclock = use_downclock
         self.max_roster = max_roster
@@ -215,29 +229,26 @@ class PlayerPolicy(Policy):
 
     # -- 3. push the frontier ------------------------------------------------
     def do_combat(self, sim):
+        """Dig. Each layer must be taken in order, so this is a straight
+        descent until the party can't hold or the session budget runs out."""
         self._combat_start_actions = self.actions
         for dev in sim.db.list_devices():
             mac = dev["mac"]
-            rift = sim.world.generate_rift(mac)
-            for _ in range(len(rift["nodes"])):
+            for _ in range(40):
                 if not self._combat_budget():
                     return
                 prog = sim.db.get_progress(mac)
-                node = prog["cleared"]
-                if node >= len(rift["nodes"]):
+                layer = prog["cleared"] + 1
+                if layer > sim.world.LAYERS:
                     break
                 party = self._party(sim)
                 if not party:
                     return
-                odds = battle_odds(sim, party, mac, node)
+                odds = battle_odds(sim, party, mac, layer)
                 if odds < self.attempt_threshold:
-                    self.note(sim, "combat", f"skip {dev['hostname'][:14]} n{node}",
+                    self.note(sim, "combat", f"stop {dev['hostname'][:14]} L{layer}",
                               f"odds={odds:.0%} < {self.attempt_threshold:.0%}")
-                    break          # genuinely out of reach; come back stronger
-
-                # Each attempt re-seeds the fight, so a losing roll isn't a
-                # verdict — it's a re-roll. Players grind these. Budget the
-                # retries against the odds, and stop when the party is spent.
+                    break
                 tries = 1 if odds >= 0.9 else min(self.max_retries,
                                                   int(1.5 / max(odds, 0.05)))
                 won = False
@@ -246,37 +257,44 @@ class PlayerPolicy(Policy):
                         return
                     party = self._party(sim)
                     if any(d.care["energy"] < 25 for d in party):
-                        for d in party:
-                            self._post(sim, f"/api/daemon/{d.id}/care",
-                                       {"action": "rest"})
-                        party = self._party(sim)
-                        if any(d.care["energy"] < 25 for d in party):
-                            self.note(sim, "combat", "abort: party exhausted",
-                                      f"{dev['hostname'][:14]} n{node}")
-                            return          # too tired; next session
+                        self.note(sim, "combat", "pause: party spent",
+                                  f"{dev['hostname'][:14]} L{layer}")
+                        return          # idling restores energy now
                     st, res = self._post(sim, "/api/battle", {
                         "daemon_ids": [d.id for d in party],
-                        "mac": mac, "node_index": node})
+                        "mac": mac, "layer": layer})
                     self.fights += 1
                     if st == 200 and res.get("won"):
                         won = True
                         break
-                self.note(sim, "combat",
-                          f"{'CLEARED' if won else 'failed'} "
-                          f"{dev['hostname'][:14]} n{node}",
-                          f"odds={odds:.0%} tries={tries} party="
-                          f"{'/'.join(d.name[:6] for d in party)}")
-                if not won:
+                if won:
+                    if layer % sim.world.GATEKEEPER_EVERY == 0:
+                        self.note(sim, "combat", f"GATEKEEPER {dev['hostname'][:14]} L{layer}",
+                                  f"odds={odds:.0%}")
+                else:
+                    self.note(sim, "combat", f"failed {dev['hostname'][:14]} L{layer}",
+                              f"odds={odds:.0%} tries={tries}")
                     break
 
     # -- 4. free daemons are wasted daemons ---------------------------------
     def do_capture(self, sim):
+        """Every 10th layer yields one daemon. Take what's owed."""
         for dev in sim.db.list_devices():
-            if len(sim.db.list_daemons()) >= self.max_roster or not self._budget():
-                return
-            prog = sim.db.get_progress(dev["mac"])
-            if prog["boss_down"] and not sim.ticker.dormancy(dev["mac"]):
-                self._post(sim, "/api/capture", {"mac": dev["mac"]})
+            mac = dev["mac"]
+            prog = sim.db.get_progress(mac)
+            avail = sim.world.captures_available(prog["cleared"],
+                                                 prog["captures_taken"])
+            while avail > 0 and self._budget():
+                if len(sim.db.list_daemons()) >= self.max_roster:
+                    return
+                if sim.ticker.dormancy(mac):
+                    break
+                st, res = self._post(sim, "/api/capture", {"mac": mac})
+                if st != 200:
+                    break
+                self.note(sim, "capture", f"drew from {dev['hostname'][:14]}",
+                          res.get("daemon", {}).get("name", ""))
+                avail -= 1
 
     def do_assign(self, sim):
         """Spare daemons harvest or train, per strategy."""
@@ -288,23 +306,26 @@ class PlayerPolicy(Policy):
         if not spare:
             return
         n_harvest = round(len(spare) * self.harvest_share)
-        # harvest: fill cleared nodes on the deepest progressed rifts first
+        # harvest posts sit on shelves — every 10th cleared layer. Deeper
+        # shelves pay far more, so fill from the bottom up.
         open_nodes = []
+        step = sim.world.CAPTURE_EVERY
         for dev in sim.db.list_devices():
             mac = dev["mac"]
             prog = sim.db.get_progress(mac)
             taken = {h["node_index"] for h in sim.db.list_harvests(mac)}
-            for i in range(prog["cleared"]):
-                if i not in taken:
-                    open_nodes.append((prog["tier"], i, mac))
+            for L in range(step, prog["cleared"] + 1, step):
+                if L not in taken:
+                    open_nodes.append((prog["tier"], L, mac))
         open_nodes.sort(reverse=True)
         for d in spare[:n_harvest]:
             if not open_nodes or not self._budget():
                 break
             _, idx, mac = open_nodes.pop(0)
             self._post(sim, "/api/harvest",
-                       {"daemon_id": d.id, "mac": mac, "node_index": idx})
-            self.note(sim, "assign", f"{d.name[:8]} -> harvest n{idx}", mac[-8:])
+                       {"daemon_id": d.id, "mac": mac,
+                        "layer": idx, "node_index": idx})
+            self.note(sim, "assign", f"{d.name[:8]} -> shelf L{idx}", mac[-8:])
         # train: park the rest in whichever hall has a free slot
         for d in spare[n_harvest:]:
             if not self._budget():
@@ -426,10 +447,9 @@ class PlayerPolicy(Policy):
             if not self._budget():
                 return
             mac = dev["mac"]
-            rift = sim.world.generate_rift(mac)
             prog = sim.db.get_progress(mac)
-            if prog["cleared"] < len(rift["nodes"]) or not prog["boss_down"]:
-                continue
+            if prog["cleared"] < sim.world.LAYERS:
+                continue                        # must bottom out the shaft first
             # Look one tier ahead. Overclocking every clean rift on sight is
             # how you end up with nothing you can beat.
             party = self._party(sim)
@@ -452,10 +472,9 @@ class PlayerPolicy(Policy):
         for dev in sim.db.list_devices():
             mac = dev["mac"]
             prog = sim.db.get_progress(mac)
-            rift = sim.world.generate_rift(mac)
-            node = prog["cleared"]
-            if node < len(rift["nodes"]):
-                best = max(best, battle_odds(sim, party, mac, node, trials=9))
+            if prog["cleared"] < sim.world.LAYERS:
+                best = max(best, battle_odds(sim, party, mac,
+                                             prog["cleared"] + 1, trials=9))
             if prog["tier"] > worst_tier:
                 worst_mac, worst_tier = mac, prog["tier"]
         if best < 0.2 and worst_mac:
@@ -468,21 +487,28 @@ class PlayerPolicy(Policy):
         """Hands-off progress between sessions."""
         if not self.use_expeditions:
             return
+        # Expeditions are how a shaft actually gets dug — 600 layers across
+        # six rifts is not something you hand-fight. Keep one running
+        # everywhere we can afford to.
         free = [d for d in self._roster(sim) if not self._busy(sim, d)]
-        if len(free) <= self.fighters:
+        if not free:
             return
         for dev in sim.db.list_devices():
             if not self._budget():
                 return
             mac = dev["mac"]
             prog = sim.db.get_progress(mac)
-            rift = sim.world.generate_rift(mac)
-            if prog["cleared"] >= len(rift["nodes"]):
+            if prog["cleared"] >= sim.world.LAYERS:
                 continue
             if any(e["mac"] == mac for e in sim.db.list_expeditions()):
                 continue
-            d = free[-1]
-            if battle_odds(sim, [d], mac, prog["cleared"]) > 0.6:
-                self._post(sim, "/api/expedition",
-                           {"daemon_id": d.id, "mac": mac})
+            if not free:
                 return
+            d = free[-1]
+            if battle_odds(sim, [d], mac, prog["cleared"] + 1) > 0.55:
+                st, _ = self._post(sim, "/api/expedition",
+                                   {"daemon_id": d.id, "mac": mac})
+                if st == 200:
+                    self.note(sim, "exped", f"dispatch {d.name[:8]}",
+                              f"{dev['hostname'][:14]} from L{prog['cleared']+1}")
+                    free.pop()

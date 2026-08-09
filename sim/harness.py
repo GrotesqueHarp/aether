@@ -239,11 +239,10 @@ class Sim:
         frontier = {}
         for dev in self.db.list_devices():
             mac = dev["mac"]
-            rift = self.world.generate_rift(mac)
-            node = self.db.get_progress(mac)["cleared"]
-            if node < len(rift["nodes"]):
+            depth = self.db.get_progress(mac)["cleared"]
+            if depth < self.world.LAYERS:
                 frontier[dev["hostname"] or mac] = round(
-                    battle_odds(self, party, mac, node, trials=7), 2)
+                    battle_odds(self, party, mac, depth + 1, trials=7), 2)
         return {"blocked_by": blocked_by, "frontier_odds": frontier,
                 "best_frontier": max(frontier.values(), default=0.0)}
 
