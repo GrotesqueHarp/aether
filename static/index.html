@@ -164,9 +164,14 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 .jrow.k-rift_found,.jrow.k-capture,.jrow.k-hatch,.jrow.k-evolve{border-left-color:var(--warn)}
 
 /* ---- expedition badge ---- */
+@keyframes flashring{0%{box-shadow:0 0 0 0 rgba(139,124,246,.55)}70%{box-shadow:0 0 0 12px rgba(139,124,246,0)}100%{box-shadow:0 0 0 0 rgba(139,124,246,0)}}
+.flash{animation:flashring 1.1s ease-out 2;border-color:var(--aether)!important}
+.away.jump{cursor:pointer;transition:.15s}
+.away.jump:hover{background:rgba(139,124,246,.14);filter:brightness(1.25)}
 .away{font-family:var(--mono);font-size:11px;color:var(--aether);border:1px solid var(--aether-dim);border-radius:999px;padding:2px 9px}
 .daemon.is-away{opacity:.75}
 .daemon.is-away .actions .btn{pointer-events:none;opacity:.35}
+.daemon.is-away .away.jump{pointer-events:auto;opacity:1}
 
 /* ---- resource bar ---- */
 .resbar{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:10px 34px;border-bottom:1px solid var(--hair);background:rgba(22,30,46,.6);position:sticky;top:0;z-index:20;backdrop-filter:blur(6px);min-height:22px}
@@ -524,7 +529,7 @@ async function riftView(dev){
         <div class="chip attr-${r.signature_daemon.attribute}" style="margin-top:5px">${r.signature_daemon.attribute} · ${r.signature_daemon.element}</div>
         <span class="stars" style="margin-left:6px">${'★'.repeat(r.signature_daemon.rarity)}</span>
       </div>
-      <button class="btn ${r.progress.boss_down?'primary':''}" id="capture" ${r.progress.boss_down?'':'disabled'}>${r.progress.boss_down?'Capture':'Beat boss first'}</button>
+      <button class="btn ${r.progress.boss_down&&!r.progress.captured?'primary':''}" id="capture" ${r.progress.boss_down&&!r.progress.captured?'':'disabled'}>${r.progress.captured?'Already taken':(r.progress.boss_down?'Capture':'Beat boss first')}</button>
     </div>`;
 
   renderPicker(dev);
@@ -564,14 +569,17 @@ async function riftView(dev){
   });
 }
 function renderPicker(dev){
-  const avail=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);
+  // Harvesters and trainees can be BORROWED for a fight and go back to work
+  // afterward — only expeditions put a daemon out of reach.
+  const avail=state.roster.filter(d=>!d.on_expedition);
   if(!state.roster.length){$('#picker').innerHTML=`<div class="muted" style="font-size:13px;margin-bottom:8px">No daemons yet — hatch or capture one in The Nest.</div>`;return;}
-  if(!avail.length){$('#picker').innerHTML=`<div class="muted" style="font-size:13px;margin-bottom:8px">Every daemon is busy — expeditions, harvest nodes, or training halls.</div>`;state.party=[];return;}
+  if(!avail.length){$('#picker').innerHTML=`<div class="muted" style="font-size:13px;margin-bottom:8px">Every daemon is away on an expedition. Recall one to fight.</div>`;state.party=[];return;}
   state.party=(state.party||[]).filter(id=>avail.find(d=>d.id===id));
   if(!state.party.length)state.party=[avail[0].id];
   $('#picker').innerHTML=`<div class="muted" style="font-size:12px;margin-bottom:6px">Party (tap to toggle, up to 3):</div><div class="picker">${
     avail.map(d=>{const idx=state.party.indexOf(d.id);
-      return `<div class="pick ${idx>=0?'in-party':''}" data-id="${d.id}">${idx>=0?`<span class="pnum">${idx+1}</span>`:''}<span class="dot" style="background:${d.color}"></span>${d.name} <span class="muted mono" style="font-size:11px">Lv${d.level} pw${d.power}</span></div>`;}).join('')
+      const busy=d.harvesting?'harvesting':d.training?'training':'';
+      return `<div class="pick ${idx>=0?'in-party':''}" data-id="${d.id}" title="${busy?'Will be borrowed from '+busy+' and return afterward':''}">${idx>=0?`<span class="pnum">${idx+1}</span>`:''}<span class="dot" style="background:${d.color}"></span>${d.name} <span class="muted mono" style="font-size:11px">Lv${d.level} pw${d.power}${busy?' · '+busy:''}</span></div>`;}).join('')
   }</div>`;
   $('#picker').querySelectorAll('.pick').forEach(el=>el.onclick=()=>{
     const id=+el.dataset.id, i=state.party.indexOf(id);
@@ -701,14 +709,14 @@ async function bastionView(){
       let occHtml='';
       if(f.kind==='hall'&&f.level>0){
         occHtml=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat.toUpperCase()} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
-        const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);
+        const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);  // expeditions ARE exclusive
         if(f.occupants.length<f.slots&&free.length){
           occHtml+=`<select data-enroll="${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name} · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}</option>`).join('')}</select>`;
         } else if(f.occupants.length>=f.slots){
           occHtml+=`<div class="muted mono" style="font-size:10.5px">${f.occupants.length}/${f.slots} slots — full</div>`;
         }
       }
-      html+=`<div class="card fac ${f.level===0?'unbuilt':''}">
+      html+=`<div class="card fac ${f.level===0?'unbuilt':''}" data-fac="${key}">
         <div class="fhead"><h3>${f.name}</h3><span class="flevel">${f.level===0?'UNBUILT':'LV '+f.level}</span></div>
         <div class="fdesc">${f.desc}</div>
         <div class="feffect">${f.effect}</div>
@@ -843,6 +851,60 @@ async function renderHatchery(){
   });
 }
 
+function confirmSell(d){
+  const val=Object.entries(d.sell_value||{}).map(([k,v])=>`${fmt(v)} ${k.replace('essence.','')}`).join(' · ');
+  modal(`<div class="card" style="padding:22px;max-width:430px">
+    <h2 style="font-size:19px;margin-bottom:8px">Release ${d.name}?</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:14px">${'★'.repeat(d.rarity)} ${d.stage} · Lv${d.level} · pw${d.power}<br>This is permanent. You'll receive:</div>
+    <div class="mono" style="color:var(--online);font-size:13px;margin-bottom:18px">${val||'nothing'}</div>
+    <div style="display:flex;gap:9px">
+      <button class="btn" onclick="closeModal()">Keep</button>
+      <button class="btn" style="border-color:var(--danger);color:var(--danger)" id="do-sell">Release</button>
+    </div></div>`);
+  $('#do-sell').onclick=async()=>{
+    const res=await api(`/api/daemon/${d.id}/sell`,{method:'POST',body:JSON.stringify({})});
+    closeModal();
+    if(res.error){toast(res.message||res.error);return;}
+    toast(`${res.name} released — ${Object.entries(res.payout).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')}`).join(', ')}`);
+    pollState(); nestView();
+  };
+}
+
+/* -- jump to whatever a daemon is currently doing -- */
+async function jumpToActivity(id){
+  const d=(state.roster||[]).find(x=>x.id===id);
+  if(!d){toast('Daemon not found');return;}
+  if(d.on_expedition) return openRift(d.expedition.mac);
+  if(d.harvesting)    return openRift(d.harvesting.mac, d.harvesting.node_index);
+  if(d.training)      return openBastion(d.training.hall);
+  toast(`${d.name} is resting in the Nest`);
+}
+
+async function openRift(mac, nodeIndex){
+  let dev=(state.devices||[]).find(x=>x.mac===mac);
+  if(!dev){                                   // came straight to the Nest; no scan yet
+    try{ const known=await api('/api/devices'); state.devices=known.devices||[]; }catch(e){}
+    dev=(state.devices||[]).find(x=>x.mac===mac) || {mac, hostname:''};
+  }
+  state.view='scan';
+  await riftView(dev);
+  if(nodeIndex!=null) flashTo(`.node[data-node="${nodeIndex}"]`);
+}
+
+async function openBastion(hall){
+  state.view='bastion'; setActive('bastion');
+  await bastionView();
+  flashTo(`[data-fac="${hall}"]`);
+}
+
+function flashTo(selector){
+  const el=$('#main').querySelector(selector);
+  if(!el)return;
+  el.scrollIntoView({behavior:'smooth', block:'center'});
+  el.classList.add('flash');
+  setTimeout(()=>el.classList.remove('flash'), 2200);
+}
+
 function daemonCard(d){
   const away=d.on_expedition, mining=!!d.harvesting, inHall=!!d.training;
   const evo = d.can_evolve&&!away?`<button class="btn primary" data-act="evolve" data-id="${d.id}">Evolve → next stage</button>`:'';
@@ -850,7 +912,7 @@ function daemonCard(d){
     <div class="head">
       <div class="sig">${daemonSigil(d)}</div>
       <div class="title">
-        <h3>${d.name} ${away?`<span class="away">AWAY · ${d.expedition.world}</span>`:''}${mining?`<span class="away" style="color:var(--online);border-color:var(--online)">HARVESTING · ${d.harvesting.world}</span>`:''}${inHall?`<span class="away" style="color:var(--warn);border-color:var(--warn)">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()})</span>`:''}</h3>
+        <h3>${d.name} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()}) ↗</span>`:''}</h3>
         <div class="lvl">${d.stage} · Lv${d.level} · <span class="attr-${d.attribute}">${d.attribute}</span> · <span style="color:${d.color}">${d.element}</span> <span class="stars">${'★'.repeat(d.rarity)}</span></div>
         <div class="xpbar" style="margin-top:7px"><i style="width:${Math.round(100*d.xp/d.xp_to_next)}%"></i></div>
         <div class="mono muted" style="font-size:10.5px;margin-top:3px">${d.xp}/${d.xp_to_next} XP · ${d.wins}W ${d.losses}L</div>
@@ -871,6 +933,7 @@ function daemonCard(d){
       <button class="btn" data-act="rest" data-id="${d.id}">Rest</button>
       <button class="btn" data-act="play" data-id="${d.id}">Play</button>
       <button class="btn" data-act="cleanse" data-id="${d.id}">Cleanse</button>
+      <button class="btn ghost" data-sell="${d.id}" title="Release for resources">Sell</button>
     </div>
     ${inHall?`<div class="muted" style="font-size:11.5px;font-family:var(--mono)">manual training paused — ${d.training.hall_name} is handling it (+${d.training.rate}/h)</div>`:`<div class="actions">
       <span class="muted" style="font-size:12px;align-self:center">Train:</span>
@@ -888,6 +951,10 @@ function bindDaemonActions(){
     if(act==='evolve'){const r=await api(`/api/daemon/${id}/evolve`,{method:'POST'});if(r.result.ok)toast(`Evolved to ${r.result.to}!`+(r.result.attr_from!==r.result.attr_to?` (now ${r.result.attr_to})`:''));updateCard(r.daemon);return;}
     const r=await api(`/api/daemon/${id}/care`,{method:'POST',body:JSON.stringify({action:act})});
     updateCard(r.daemon);
+  });
+  document.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{
+    const d=state.roster.find(x=>x.id===+b.dataset.sell);
+    if(d)confirmSell(d);
   });
   document.querySelectorAll('[data-train]').forEach(b=>b.onclick=async()=>{
     const r=await api(`/api/daemon/${b.dataset.id}/train`,{method:'POST',body:JSON.stringify({stat:b.dataset.train})});

@@ -179,6 +179,35 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Capture limits & selling (v0.7.2)
+
+**Signature daemons can only be captured once.** The capture button had no
+once-only check, so a single cleared rift could mint unlimited daemons.
+Each rift now yields one signature daemon per tier — Overclocking (or
+Downclocking) refreshes it, so pushing a rift deeper is also how you earn
+another shot at its signature creature. Schema v5 adds `rift_progress.captured`.
+
+**Selling.** Daemon cards have a Sell button that shows exactly what you'll get
+before you confirm. Value scales mostly on rarity and stage rather than level,
+so a 5-star Mega is worth keeping. Bits always; its element's essence when that
+element has one; Cores only for rare, well-grown daemons. Guards: you can't
+sell your only daemon or one away on expedition, and selling vacates any
+harvest node or training hall it held. The old `/release` endpoint now pays out
+too, rather than silently deleting.
+
+## Jump to activity (v0.7.1)
+
+Daemon cards in the Nest show what each one is doing — AWAY, HARVESTING,
+TRAINING. Those badges are now clickable: tap one and you land on the exact
+place that daemon is working, with the target highlighted. A harvester takes
+you to its rift with its node flashing; a trainee takes you to the Bastion with
+its hall flashing; an expedition takes you to the rift it's exploring.
+
+Also fixed here: the battle party picker still hid harvesters and trainees,
+so the borrowable-workers change in v0.7 wasn't actually reachable from the
+browser. The picker now offers them, labelled with the job they'll be pulled
+from and returned to.
+
 ## Rest, and the Overclock trap (v0.7)
 
 **Energy now regenerates.** It used to drain at a flat -10/h whether or not a

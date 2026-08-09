@@ -138,6 +138,32 @@ def hatch(egg: dict) -> Daemon:
     return d
 
 
+# ------------------------------------------------------------------ selling -
+# What a daemon is worth when you let it go. Rarity and stage matter far more
+# than level, so a 5-star Mega is genuinely worth keeping around rather than
+# grinding a common one up.
+RARITY_VALUE = {1: 1.0, 2: 1.5, 3: 2.2, 4: 3.2, 5: 4.5}
+STAGE_VALUE = {"Egg": 0.4, "Hatchling": 1.0, "Rookie": 1.5,
+               "Champion": 2.2, "Ultimate": 3.2, "Mega": 4.5}
+ELEMENT_TO_ESSENCE = {v: k for k, v in ELEMENT_FOR_ESSENCE.items()}
+
+
+def sell_value(d) -> dict:
+    """Bits always; its element's essence if that element has one; Cores only
+    for genuinely rare, well-grown daemons."""
+    mult = RARITY_VALUE.get(d.rarity, 1.0) * STAGE_VALUE.get(d.stage, 1.0)
+    out = {"bits": round((60 + d.level * 18) * mult, 1)}
+    ess = ELEMENT_TO_ESSENCE.get(d.element)
+    if ess:
+        out["essence." + ess] = round((6 + d.level * 1.5)
+                                      * RARITY_VALUE.get(d.rarity, 1.0), 1)
+    else:
+        out["bits"] = round(out["bits"] * 1.35, 1)   # no essence? pay in Bits
+    if d.rarity >= 4 and d.stage in ("Ultimate", "Mega"):
+        out["cores"] = float(d.rarity - 3)
+    return out
+
+
 # --------------------------------------------------------------- crucible ---
 # Which essences you can earn depends on what hardware you happen to own: a LAN
 # with no Bazaar device can never produce Plasma, which used to make four

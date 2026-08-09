@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -60,11 +60,21 @@ def _migrate_3_to_4(c: sqlite3.Connection):
         c.execute("ALTER TABLE rift_progress ADD COLUMN signal REAL NOT NULL DEFAULT 0")
 
 
+def _migrate_4_to_5(c: sqlite3.Connection):
+    """v0.7 -> v0.7.2: rift_progress.captured — the signature daemon was
+    infinitely re-capturable, so one cleared rift could mint unlimited
+    daemons."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(rift_progress)")}
+    if "captured" not in cols:
+        c.execute("ALTER TABLE rift_progress ADD COLUMN captured INTEGER NOT NULL DEFAULT 0")
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
     3: _migrate_3_to_4,
-    # 4: _migrate_4_to_5,   <- next schema change goes here
+    4: _migrate_4_to_5,
+    # 5: _migrate_5_to_6,   <- next schema change goes here
 }
 
 
@@ -92,7 +102,8 @@ def init_db():
                 updated REAL NOT NULL,
                 tier INTEGER NOT NULL DEFAULT 0,
                 ward INTEGER NOT NULL DEFAULT 0,
-                signal REAL NOT NULL DEFAULT 0
+                signal REAL NOT NULL DEFAULT 0,
+                captured INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
@@ -239,10 +250,11 @@ def get_progress(mac: str) -> dict:
         row = c.execute("SELECT * FROM rift_progress WHERE mac = ?", (mac,)).fetchone()
     if not row:
         return {"mac": mac, "cleared": 0, "boss_down": 0,
-                "tier": 0, "ward": 0, "signal": 0.0}
+                "tier": 0, "ward": 0, "signal": 0.0, "captured": 0}
     return {"mac": row["mac"], "cleared": row["cleared"],
             "boss_down": row["boss_down"], "tier": row["tier"],
-            "ward": row["ward"], "signal": row["signal"]}
+            "ward": row["ward"], "signal": row["signal"],
+            "captured": row["captured"]}
 
 
 def set_progress(mac: str, cleared: int, boss_down: bool):

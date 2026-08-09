@@ -65,6 +65,7 @@ def _daemon_payload(d: Daemon) -> dict:
             "rates": {k: round(v, 2) for k, v in economy.harvest_rates(
                 d, rift, hv["node_index"], ticker.dormancy(hv["mac"])).items()},
         }
+    out["sell_value"] = economy.sell_value(d)
     tr = db.get_training(d.id) if d.id else None
     out["training"] = None
     if tr:
@@ -327,10 +328,34 @@ def evolve(did):
     return jsonify({"result": res, "daemon": _daemon_payload(d)})
 
 
+@app.route("/api/daemon/<int:did>/sell", methods=["POST"])
 @app.route("/api/daemon/<int:did>/release", methods=["POST"])
-def release(did):
+def sell(did):
+    d = db.get_daemon(did)
+    if not d:
+        return jsonify({"error": "not_found"}), 404
+    if len(db.list_daemons()) <= 1:
+        return jsonify({"error": "last_daemon",
+                        "message": "This is your only daemon — you can't let it "
+                                   "go."}), 400
+    ex = db.get_expedition(did)
+    if ex and ex["state"] == "active":
+        return jsonify({"error": "on_expedition",
+                        "message": f"{d.name} is away on an expedition. Recall "
+                                   "it first."}), 400
+    payout = economy.sell_value(d)
+    for kind, amt in payout.items():
+        db.res_add(kind, amt)
+    db.end_harvest(did)          # vacate any posting it held
+    db.end_training(did)
     db.release_daemon(did)
-    return jsonify({"ok": True})
+    db.add_event("sell",
+                 f"{d.name} ({'★' * d.rarity} {d.stage}) was released back into "
+                 f"the aether, leaving "
+                 + ", ".join(f"{v:g} {k.replace('essence.', '')}"
+                             for k, v in payout.items()) + ".",
+                 daemon_id=did)
+    return jsonify({"ok": True, "payout": payout, "name": d.name})
 
 
 # -- battle (party) --
@@ -443,6 +468,11 @@ def capture():
         return jsonify({"error": "boss_not_defeated",
                         "message": "Defeat the rift's Gatekeeper to stabilize it "
                                    "before capturing its signature daemon."}), 400
+    if prog.get("captured"):
+        return jsonify({"error": "already_captured",
+                        "message": "This rift's signature daemon has already been "
+                                   "taken. Overclock the rift for another."}), 400
+    db.set_progress_fields(r["mac"], captured=1)
     wild = Daemon.from_dict(r["signature_daemon"])
     wild.id = None
     db.add_daemon(wild)
@@ -690,6 +720,7 @@ def overclock():
     res = war.overclock(r["mac"], len(r["nodes"]))
     if not res.get("ok"):
         return jsonify(res), 400
+    db.set_progress_fields(r["mac"], captured=0)
     db.add_event("overclock",
                  f"{r['world_name']} has been OVERCLOCKED to Tier {res['tier']} — "
                  f"the rift reboots hungrier and richer.", mac=r["mac"])
@@ -706,6 +737,7 @@ def downclock():
     res = war.downclock(r["mac"])
     if not res.get("ok"):
         return jsonify(res), 400
+    db.set_progress_fields(r["mac"], captured=0)
     db.add_event("downclock",
                  f"{r['world_name']} powers down to Tier {res['tier']} — "
                  f"the rift cools and must be retaken.", mac=r["mac"])
