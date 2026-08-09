@@ -130,6 +130,11 @@ core/db.py          SQLite (roster, progress, devices, journal, expeditions,
 core/economy.py     Resources, harvest rates, loot tables, the Hatchery
 core/bastion.py     Facilities, training halls, care automations
 core/war.py         Overclock tiers, the Null, incursions, garrisons
+sim/clock.py        Virtual clock (runs the game at any speed)
+sim/harness.py      Headless world: scratch DB, fake LAN, tick loop
+sim/agent.py        Win-odds forecasting + a policy that plays like a player
+sim/report.py       Milestones, stall detection, bottleneck attribution, A/B
+sim/diagnose.py     CLI for all of the above
 core/ticker.py      Background heartbeat: drift, presence, expeditions
 static/index.html   The dashboard (single-file vanilla SPA)
 install.sh          Debian installer: system tools check/install, systemd unit
@@ -173,6 +178,47 @@ incremental cost curve.
 
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
+
+## The Crucible (v0.6.1, backend only)
+
+Which essences you can earn depends on what hardware you own — a LAN with no
+Bazaar device could never produce Plasma, which made four facilities
+permanently unbuildable. The Crucible fixes that: lossy conversion between
+essence types, plus Cores reclaimed from essence + Bits so a failed boss can't
+lock you out of the upgrades that would let you beat it. It also gives the
+late-game Bits pile-up a sink.
+
+API: `GET /api/crucible`, `POST /api/crucible/transmute {from,to,amount}`,
+`POST /api/crucible/reclaim {essence,count}`. Knobs: `AETHER_TRANSMUTE_RATIO`
+(0 disables), `AETHER_TRANSMUTE_BITS`, `AETHER_RECLAIM_ESSENCE`,
+`AETHER_RECLAIM_BITS`.
+
+**There is no UI for this yet** — the endpoints work and the simulator uses
+them, but nothing in the browser exposes it. That lands with the v0.8 tuning
+pass.
+
+## The simulator (dev tooling)
+
+Milestones in this game are days apart, so they can't be felt by playing.
+`sim/` runs the real game modules — same economy, same battle sim, same ticker
+functions the container calls — on a virtual clock, driving the actual HTTP
+routes through Flask's test client. A simulated month takes seconds, and it
+can't drift from the shipped game because it *is* the shipped game.
+
+```bash
+python3 -m sim.diagnose configs                       # list tuning presets
+python3 -m sim.diagnose report  baseline --days 21    # milestones, stalls, verdicts
+python3 -m sim.diagnose log     baseline --days 8     # session-by-session decisions
+python3 -m sim.diagnose log     baseline --phase combat --day-limit 5
+python3 -m sim.diagnose compare casual normal obsessive --days 14
+```
+
+The simulated player only acts during *sessions* — a few check-ins a day with
+a limited action budget — because an always-on optimizer would report pacing
+no human will ever experience. Everything is deterministic: identical configs
+produce identical timelines, so A/B comparisons are honest.
+
+Scratch databases go to a temp dir; nothing here touches your real save.
 
 ## The Bastion & the war (v0.6)
 

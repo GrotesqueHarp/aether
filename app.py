@@ -550,6 +550,44 @@ def hatchery_synthesize():
     return jsonify(res)
 
 
+# -- the crucible --
+@app.route("/api/crucible")
+def crucible():
+    return jsonify({
+        "essence_kinds": economy.ESSENCE_KINDS,
+        "ratio": economy.TRANSMUTE_RATIO,
+        "bits_per": economy.TRANSMUTE_BITS_PER,
+        "reclaim_cost": economy.reclaim_cost(1),
+        "resources": db.res_all(),
+    })
+
+
+@app.route("/api/crucible/transmute", methods=["POST"])
+def crucible_transmute():
+    b = request.get_json(force=True)
+    src, dst = b.get("from", ""), b.get("to", "")
+    res = economy.transmute(src, dst, b.get("amount", 10))
+    if not res.get("ok"):
+        return jsonify(res), 400
+    spent = res["cost"].get("essence." + src, 0)
+    db.add_event("transmute",
+                 f"The Crucible renders {spent:.0f} {src} into "
+                 f"{res['gained']:.0f} {dst}.")
+    return jsonify(res)
+
+
+@app.route("/api/crucible/reclaim", methods=["POST"])
+def crucible_reclaim():
+    b = request.get_json(force=True)
+    res = economy.reclaim(b.get("essence", ""), b.get("count", 1))
+    if not res.get("ok"):
+        return jsonify(res), 400
+    db.add_event("reclaim",
+                 f"The Crucible compresses raw essence into "
+                 f"{res['gained']:.0f} Core(s).")
+    return jsonify(res)
+
+
 # -- the bastion --
 @app.route("/api/bastion")
 def bastion_view():

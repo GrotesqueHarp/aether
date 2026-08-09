@@ -138,6 +138,60 @@ def hatch(egg: dict) -> Daemon:
     return d
 
 
+# --------------------------------------------------------------- crucible ---
+# Which essences you can earn depends on what hardware you happen to own: a LAN
+# with no Bazaar device can never produce Plasma, which used to make four
+# facilities permanently unbuildable. The Crucible is the escape hatch — it is
+# deliberately lossy, so native essence is always better, but nothing is ever
+# unreachable. It also gives the Bits pile-up an actual sink.
+TRANSMUTE_RATIO = float(os.environ.get("AETHER_TRANSMUTE_RATIO", "0.55"))
+TRANSMUTE_BITS_PER = float(os.environ.get("AETHER_TRANSMUTE_BITS", "14"))
+RECLAIM_ESSENCE = float(os.environ.get("AETHER_RECLAIM_ESSENCE", "45"))
+RECLAIM_BITS = float(os.environ.get("AETHER_RECLAIM_BITS", "900"))
+
+
+def transmute_cost(from_kind: str, to_kind: str, out_amount: float) -> dict:
+    """What it costs to end up with `out_amount` of `to_kind`."""
+    return {f"essence.{from_kind}": round(out_amount / TRANSMUTE_RATIO, 2),
+            "bits": round(out_amount * TRANSMUTE_BITS_PER, 1)}
+
+
+def transmute(from_kind: str, to_kind: str, out_amount: float) -> dict:
+    if TRANSMUTE_RATIO <= 0:
+        return {"ok": False, "reason": "disabled"}
+    if from_kind == to_kind or from_kind not in ESSENCE_KINDS \
+            or to_kind not in ESSENCE_KINDS:
+        return {"ok": False, "reason": "bad_essence"}
+    out_amount = max(1.0, float(out_amount))
+    cost = transmute_cost(from_kind, to_kind, out_amount)
+    if not db.res_spend(cost):
+        return {"ok": False, "reason": "cant_afford", "cost": cost}
+    db.res_add(f"essence.{to_kind}", out_amount)
+    return {"ok": True, "gained": out_amount, "cost": cost}
+
+
+def reclaim_cost(count: float = 1) -> dict:
+    return {"essence": round(RECLAIM_ESSENCE * count, 1),
+            "bits": round(RECLAIM_BITS * count, 1)}
+
+
+def reclaim(essence_kind: str, count: float = 1) -> dict:
+    """Grind essence and Bits into Cores. Cores used to come only from bosses,
+    which meant failing to beat a boss locked you out of the upgrades that
+    would let you beat it."""
+    if RECLAIM_ESSENCE <= 0:
+        return {"ok": False, "reason": "disabled"}
+    if essence_kind not in ESSENCE_KINDS:
+        return {"ok": False, "reason": "bad_essence"}
+    count = max(1.0, float(count))
+    cost = {f"essence.{essence_kind}": round(RECLAIM_ESSENCE * count, 1),
+            "bits": round(RECLAIM_BITS * count, 1)}
+    if not db.res_spend(cost):
+        return {"ok": False, "reason": "cant_afford", "cost": cost}
+    db.res_add("cores", count)
+    return {"ok": True, "gained": count, "cost": cost}
+
+
 # -------------------------------------------------------------------- rates --
 def total_rates() -> dict:
     """Summed per-hour income across all active harvesters (for the UI bar)."""

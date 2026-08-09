@@ -26,3 +26,4 @@ $RECYCLE.BIN/
 
 # NOTE: vendor/ is intentionally NOT ignored. Committing it is what makes the
 # repo self-contained — clone and run, no pip required.
+sim-scratch/
