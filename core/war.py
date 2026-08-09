@@ -65,13 +65,12 @@ def overclock_cost(tier: int) -> dict:
 
 
 def next_tier_boss_power(mac: str, tier_delta: int = 1) -> int:
-    """What the Gatekeeper would hit like one tier up — so the UI can warn
-    before you commit, instead of after."""
-    from .world import generate_rift
-    rift = generate_rift(mac)
+    """What the final Gatekeeper would hit like one tier up — so the UI can
+    warn before you commit, instead of after."""
+    from .world import layer_enemies, LAYERS
     prog = db.get_progress(mac)
-    boss = Daemon.from_dict(rift["nodes"][-1]["enemy"])
-    return scale_enemy(boss, {"tier": prog["tier"] + tier_delta}).power()
+    foes = layer_enemies(mac, LAYERS, prog["tier"] + tier_delta)
+    return sum(f.power() for f in foes)
 
 
 def overclock(mac: str, n_nodes: int) -> dict:

@@ -168,20 +168,26 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
 
     rift = generate_rift(mac)
     prog = db.get_progress(mac)
-    if prog["cleared"] >= len(rift["nodes"]):
+    from .world import LAYERS
+    if prog["cleared"] >= LAYERS:
         db.end_expedition(d.id)
         db.add_event("exped_done",
-                     f"{d.name} returns from {rift['world_name']} — every node "
-                     f"cleared. It looks proud of itself.", mac=mac, daemon_id=d.id)
+                     f"{d.name} returns from {rift['world_name']} — the shaft "
+                     f"bottoms out at layer {LAYERS}. It looks proud of itself.",
+                     mac=mac, daemon_id=d.id)
         return
 
-    node = rift["nodes"][prog["cleared"]]
-    enemy = Daemon.from_dict(node["enemy"])
+    from .world import layer_spec, layer_enemies
+    from .battle import simulate_team
+    layer = prog["cleared"] + 1
+    node = layer_spec(rift["mac"], layer, prog["tier"])
+    foes = layer_enemies(rift["mac"], layer, prog["tier"])
     dim = dormancy(mac)
     if dim:
-        enemy = dormant_enemy(enemy)
+        foes = [dormant_enemy(f) for f in foes]
+    enemy = foes[0]
 
-    res = simulate(d, enemy, seed_extra=f"exped:{mac}:{node['index']}:{ex['fights']}")
+    res = simulate_team([d], foes, seed_extra=f"exped:{mac}:{layer}:{ex['fights']}")
     db.update_expedition(d.id, fights=ex["fights"] + 1)
 
     if res["winner"] == "a":
@@ -189,16 +195,17 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         ev = d.gain_xp(xp)
         d.wins += 1
         d.care["energy"] = max(0, d.care["energy"] - 12)
-        boss = node["is_boss"]
-        db.set_progress(mac, prog["cleared"] + 1, prog["boss_down"] or boss)
+        boss = node["is_gatekeeper"]
+        db.set_progress(mac, layer, layer >= LAYERS)
         lvl_txt = f" It reached Lv{d.level}!" if ev["levels"] else ""
         if boss:
             db.add_event("exped_boss",
-                         f"{d.name} defeated {enemy.name} — {rift['world_name']} "
-                         f"is stabilized. (+{xp} XP){lvl_txt}", mac=mac, daemon_id=d.id)
+                         f"{d.name} broke the Gatekeeper at layer {layer} of "
+                         f"{rift['world_name']}. (+{xp} XP){lvl_txt}",
+                         mac=mac, daemon_id=d.id)
         else:
             db.add_event("exped_win",
-                         f"{d.name} cleared node {node['index'] + 1} of "
+                         f"{d.name} dug to layer {layer} of "
                          f"{rift['world_name']}, defeating {enemy.name}. "
                          f"(+{xp} XP){lvl_txt}"
                          + (" [dormant rift bonus]" if dim else ""),
@@ -230,7 +237,7 @@ def tick_harvests(now: float | None = None):
             db.end_harvest(h["daemon_id"])
             continue
         # if the world was somehow un-cleared past this node, eject gracefully
-        if db.get_progress(h["mac"])["cleared"] <= h["node_index"]:
+        if h["node_index"] > db.get_progress(h["mac"])["cleared"]:
             db.end_harvest(h["daemon_id"])
             db.add_event("harvest_ejected",
                          f"{d.name} was pushed off its harvest node in "

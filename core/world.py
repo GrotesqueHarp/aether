@@ -50,31 +50,6 @@ def generate_rift(mac: str, hostname: str = "", vendor: str = "") -> dict:
             "density": round(0.4 + hr.random() * 0.6, 2),
         })
 
-    # combat nodes: a linear crawl, difficulty ramping to a boss
-    n_nodes = r.randint(4, 7)
-    nodes = []
-    for i in range(n_nodes):
-        nr = r.sub("node", str(i))
-        is_boss = (i == n_nodes - 1)
-        lvl = depth + i * 2 + (6 if is_boss else 0)
-        enemy = generate_daemon(
-            nr.sub("enemy"),
-            origin_mac=mac,
-            favored_elements=biome["elements"],
-            min_rarity=(3 if is_boss else 1),
-            stage=_stage_for_level(lvl),
-        )
-        enemy.level = lvl
-        if is_boss:
-            enemy.name = f"{enemy.name} the Gatekeeper"
-        nodes.append({
-            "index": i,
-            "is_boss": is_boss,
-            "enemy_level": lvl,
-            "enemy": enemy.to_dict(),
-            "reward_xp": 12 + lvl * 4 + (60 if is_boss else 0),
-        })
-
     # the rift's signature wild daemon you can try to capture
     wild = generate_daemon(
         r.sub("signature"), origin_mac=mac,
@@ -93,7 +68,7 @@ def generate_rift(mac: str, hostname: str = "", vendor: str = "") -> dict:
         "biome": biome,
         "depth": depth,
         "habitats": habitats,
-        "nodes": nodes,
+        "layers": LAYERS,
         "signature_daemon": wild.to_dict(),
     }
 
@@ -108,3 +83,104 @@ def _stage_for_level(lvl: int) -> str:
     if lvl >= 3:
         return "Hatchling"
     return "Hatchling"
+
+
+# ---------------------------------------------------------------- layers ----
+# A rift is a shaft you dig, not a corridor you walk. Every device has the same
+# 100 layers; how hard they hit depends on the rift's seeded depth. Gatekeepers
+# stand every 25 layers, and every 10th layer yields one — and only one —
+# capturable daemon.
+#
+# Layers are generated on demand rather than up front: building 100 enemies for
+# every rift on every API call would be pure waste when the UI only ever shows
+# a handful at a time.
+LAYERS = 100
+GATEKEEPER_EVERY = 25
+CAPTURE_EVERY = 10
+
+
+def is_gatekeeper(layer: int) -> bool:
+    return layer % GATEKEEPER_EVERY == 0
+
+
+def foes_at(layer: int) -> int:
+    """Deeper layers send more of them. Capped at 4 — parties max out at 3, and
+    beyond that a fight stops being winnable no matter how strong you are."""
+    return 1 + min(3, max(0, (layer - 1) // 30))
+
+
+def layer_level(depth: int, layer: int, tier: int = 0) -> int:
+    base = depth + layer * (0.75 + depth * 0.06)
+    return max(1, round(base * (1 + 0.35 * tier)) + tier * 5)
+
+
+def layer_enemies(mac: str, layer: int, tier: int = 0) -> list:
+    """The pack waiting on this layer. More foes deeper down, but each one is
+    individually softened so total difficulty curves smoothly instead of
+    stepping every time the count goes up."""
+    mac = normalize_mac(mac)
+    rift = generate_rift(mac)
+    depth, biome = rift["depth"], rift["biome"]
+    n = foes_at(layer)
+    boss = is_gatekeeper(layer)
+    lvl = layer_level(depth, layer, tier)
+    # split the difficulty budget across the pack
+    each = max(1, round(lvl / (1 + 0.22 * (n - 1))))
+
+    out = []
+    for i in range(n):
+        er = rift_rng(mac).sub("layer", str(layer), "foe", str(i))
+        lead = (i == 0)
+        e = generate_daemon(
+            er, origin_mac=mac, favored_elements=biome["elements"],
+            min_rarity=(3 if boss and lead else 1),
+            stage=_stage_for_level(each))
+        e.level = each + (4 if boss and lead else 0)
+        if boss and lead:
+            e.name = f"{e.name} the Gatekeeper"
+        out.append(e)
+    return out
+
+
+def layer_spec(mac: str, layer: int, tier: int = 0) -> dict:
+    """Display/reward descriptor for one layer."""
+    rift = generate_rift(mac)
+    lvl = layer_level(rift["depth"], layer, tier)
+    boss = is_gatekeeper(layer)
+    return {
+        "layer": layer,
+        "is_gatekeeper": boss,
+        "enemy_level": lvl,
+        "foes": foes_at(layer),
+        "capture_layer": layer % CAPTURE_EVERY == 0,
+        "reward_xp": int((10 + lvl * 4 + (80 if boss else 0)) * (1 + 0.4 * tier)),
+    }
+
+
+def layer_window(mac: str, cleared: int, tier: int = 0, back: int = 4,
+                 ahead: int = 3) -> list:
+    """The slice of the shaft worth rendering: a little history for context,
+    the frontier, and a peek at what's below."""
+    lo = max(1, cleared - back + 1)
+    hi = min(LAYERS, cleared + ahead)
+    return [layer_spec(mac, L, tier) for L in range(lo, hi + 1)]
+
+
+def captures_available(cleared: int, taken: int) -> int:
+    """One capture per 10 layers reached, minus what you've already claimed."""
+    return max(0, cleared // CAPTURE_EVERY - taken)
+
+
+def capture_daemon(mac: str, milestone: int, tier: int = 0):
+    """A distinct daemon for each 10-layer milestone, deterministic per rift,
+    milestone and tier."""
+    mac = normalize_mac(mac)
+    rift = generate_rift(mac)
+    r = rift_rng(mac).sub("capture", str(tier), str(milestone))
+    lvl = layer_level(rift["depth"], milestone * CAPTURE_EVERY, tier)
+    d = generate_daemon(
+        r, origin_mac=mac, favored_elements=rift["biome"]["elements"],
+        min_rarity=2 if milestone < 5 else 3,
+        stage=_stage_for_level(lvl))
+    d.level = max(1, int(lvl * 0.8))
+    return d

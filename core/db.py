@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -69,12 +69,30 @@ def _migrate_4_to_5(c: sqlite3.Connection):
         c.execute("ALTER TABLE rift_progress ADD COLUMN captured INTEGER NOT NULL DEFAULT 0")
 
 
+def _migrate_5_to_6(c: sqlite3.Connection):
+    """v0.7.2 -> v0.8: rifts became a 100-layer descent instead of 4-7 discrete
+    nodes, so `cleared` changes meaning from 'nodes beaten' to 'deepest layer
+    reached'. Old progress is converted approximately — a finished rift is
+    credited with the full descent, otherwise ~12 layers per node cleared."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(rift_progress)")}
+    if "captures_taken" not in cols:
+        c.execute("ALTER TABLE rift_progress ADD COLUMN captures_taken "
+                  "INTEGER NOT NULL DEFAULT 0")
+    for row in c.execute("SELECT mac, cleared, boss_down, captured "
+                         "FROM rift_progress").fetchall():
+        layers = 100 if row["boss_down"] else min(100, row["cleared"] * 12)
+        c.execute("UPDATE rift_progress SET cleared = ?, captures_taken = ? "
+                  "WHERE mac = ?",
+                  (layers, 1 if row["captured"] else 0, row["mac"]))
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
     3: _migrate_3_to_4,
     4: _migrate_4_to_5,
-    # 5: _migrate_5_to_6,   <- next schema change goes here
+    5: _migrate_5_to_6,
+    # 6: _migrate_6_to_7,   <- next schema change goes here
 }
 
 
@@ -103,7 +121,8 @@ def init_db():
                 tier INTEGER NOT NULL DEFAULT 0,
                 ward INTEGER NOT NULL DEFAULT 0,
                 signal REAL NOT NULL DEFAULT 0,
-                captured INTEGER NOT NULL DEFAULT 0
+                captured INTEGER NOT NULL DEFAULT 0,
+                captures_taken INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
@@ -250,11 +269,13 @@ def get_progress(mac: str) -> dict:
         row = c.execute("SELECT * FROM rift_progress WHERE mac = ?", (mac,)).fetchone()
     if not row:
         return {"mac": mac, "cleared": 0, "boss_down": 0,
-                "tier": 0, "ward": 0, "signal": 0.0, "captured": 0}
+                "tier": 0, "ward": 0, "signal": 0.0, "captured": 0,
+                "captures_taken": 0}
     return {"mac": row["mac"], "cleared": row["cleared"],
             "boss_down": row["boss_down"], "tier": row["tier"],
             "ward": row["ward"], "signal": row["signal"],
-            "captured": row["captured"]}
+            "captured": row["captured"],
+            "captures_taken": row["captures_taken"]}
 
 
 def set_progress(mac: str, cleared: int, boss_down: bool):

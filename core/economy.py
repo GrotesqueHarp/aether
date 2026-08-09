@@ -43,9 +43,11 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     cores; regular nodes yield bits + the rift's essence. Overclock tiers and
     wards multiply everything."""
     from . import war
-    node = rift["nodes"][node_index]
+    from .world import is_gatekeeper
+    layer = max(1, node_index)
     progress = progress or db.get_progress(rift["mac"])
-    depth_factor = rift["depth"] + node_index * 1.2
+    # deeper layers pay far better — that's the whole reason to dig
+    depth_factor = rift["depth"] + layer * 0.55
     power_factor = (daemon.power() / 150.0) ** 0.6
     mult = (ECON_MULT * (DORMANT_RATE_MULT if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
@@ -53,7 +55,7 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     bits_hr = (3.0 + depth_factor * 1.5) * power_factor * mult
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
     out = {"bits": bits_hr, f"essence.{essence_kind}": bits_hr / 10.0}
-    if node["is_boss"]:
+    if is_gatekeeper(layer):
         out["cores"] = (0.6 + rift["depth"] * 0.05) / 24.0 * mult
         out["bits"] *= 0.5
     return out
@@ -80,15 +82,16 @@ def node_loot(rift: dict, node_index: int, dormant: bool,
               progress: dict | None = None) -> dict:
     """One-time drop for clearing a node (frontier clears only)."""
     from . import war
-    node = rift["nodes"][node_index]
+    from .world import is_gatekeeper, layer_spec
+    layer = max(1, node_index)
     progress = progress or db.get_progress(rift["mac"])
-    lvl = node["enemy_level"]
+    lvl = layer_spec(rift["mac"], layer, progress.get("tier", 0))["enemy_level"]
     mult = (ECON_MULT * (1.35 if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
     loot = {"bits": round((20 + lvl * 6) * mult, 1),
             f"essence.{essence_kind}": round((3 + lvl) * mult, 1)}
-    if node["is_boss"]:
+    if is_gatekeeper(layer):
         loot["cores"] = round(2.0 * (1 + progress.get("tier", 0) * 0.5), 1)
     return loot
 

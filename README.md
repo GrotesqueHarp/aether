@@ -179,6 +179,25 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## The descent (v0.8) — rifts are shafts, not corridors
+
+A rift used to be 4–7 nodes ending in a Gatekeeper. It's now **100 layers**
+you dig down through, which replaces nodes entirely.
+
+- **Gatekeepers every 25 layers** (25/50/75/100).
+- **A shelf every 10 layers.** Each shelf is both a capture milestone —
+  one daemon, once, deeper shelves giving better ones — and a harvest post.
+  Ten shelves per rift, so the UI stays readable where 100 slots wouldn't.
+- **Deeper is harder and richer.** Foes per fight climb from 1 to 4 (capped
+  there, since parties max at 3), while harvest yields climb steeply — layer 30
+  pays roughly 3× layer 10.
+- **Overclock now needs a full descent** to layer 100, and refreshes every
+  shelf for another pass at ×1.6 difficulty and ×2 yields.
+
+Layers generate on demand rather than up front — building 100 enemies per rift
+per API call would be pure waste when only a handful are ever on screen.
+Schema v6 migrates existing saves, mapping old node progress onto layer depth.
+
 ## Capture limits & selling (v0.7.2)
 
 **Signature daemons can only be captured once.** The capture button had no

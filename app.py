@@ -35,6 +35,7 @@ except ModuleNotFoundError:
 from core import db, scan, ticker, economy, bastion, war
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
+from core import world as world_mod
 from core.battle import simulate, simulate_team
 
 app = Flask(__name__, static_folder="static", static_url_path="")
@@ -229,14 +230,19 @@ def rift(mac):
     r["progress"] = db.get_progress(r["mac"])
     r["online"] = (not dev) or bool(dev["online"])
     r["dormant"] = bool(dev) and not dev["online"]
-    # scale displayed enemies for the rift's current tier
-    if r["progress"]["tier"] > 0:
-        for n in r["nodes"]:
-            e = war.scale_enemy(Daemon.from_dict(n["enemy"]), r["progress"])
-            n["enemy"] = e.to_dict()
-            n["enemy_level"] = e.level
-    r["fully_cleared"] = (r["progress"]["cleared"] >= len(r["nodes"])
-                         and bool(r["progress"]["boss_down"]))
+    prog = r["progress"]
+    r["window"] = world_mod.layer_window(r["mac"], prog["cleared"], prog["tier"])
+    for spec in r["window"]:
+        spec["state"] = ("cleared" if spec["layer"] <= prog["cleared"]
+                         else "frontier" if spec["layer"] == prog["cleared"] + 1
+                         else "locked")
+        spec["power"] = sum(f.power() for f in world_mod.layer_enemies(
+            r["mac"], spec["layer"], prog["tier"]))
+    r["captures_available"] = world_mod.captures_available(
+        prog["cleared"], prog["captures_taken"])
+    r["next_capture_layer"] = min(world_mod.LAYERS,
+        (prog["captures_taken"] + 1) * world_mod.CAPTURE_EVERY)
+    r["fully_cleared"] = prog["cleared"] >= world_mod.LAYERS
     r["overclock_cost"] = war.overclock_cost(r["progress"]["tier"])
     r["next_tier_boss_power"] = war.next_tier_boss_power(r["mac"])
     r["can_downclock"] = r["progress"]["tier"] > 0
@@ -377,60 +383,62 @@ def battle():
         return jsonify({"error": "no_daemon"}), 404
 
     mac = body.get("mac")
-    node_index = int(body.get("node_index", 0))
+    layer = int(body.get("layer", body.get("node_index", 0)) or 0)
     try:
         r = generate_rift(mac, body.get("hostname", ""), scan.vendor_for(mac))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    if node_index >= len(r["nodes"]):
-        return jsonify({"error": "bad_node"}), 400
 
     prog = db.get_progress(r["mac"])
-    node = r["nodes"][node_index]
-    enemy = Daemon.from_dict(node["enemy"])
+    if layer < 1 or layer > world_mod.LAYERS:
+        return jsonify({"error": "bad_layer"}), 400
+    if layer > prog["cleared"] + 1:
+        return jsonify({"error": "layer_locked",
+                        "message": "Dig through the layers above this one "
+                                   "first."}), 400
+
+    spec = world_mod.layer_spec(r["mac"], layer, prog["tier"])
+    foes = world_mod.layer_enemies(r["mac"], layer, prog["tier"])
     dim = ticker.dormancy(r["mac"])
     if dim:
-        enemy = ticker.dormant_enemy(enemy)
-    enemy = war.scale_enemy(enemy, prog)
-    foes = [enemy]
-    if node["is_boss"]:
-        foes += war.boss_minions(enemy, r, prog)
+        foes = [ticker.dormant_enemy(f) for f in foes]
 
     result = simulate_team(
         party, foes,
-        seed_extra=f"{mac}:{node_index}:{sum(d.wins + d.losses for d in party)}")
+        seed_extra=f"{mac}:{layer}:{sum(d.wins + d.losses for d in party)}")
     won = result["winner"] == "a"
 
-    mults = war.tier_mults(prog)
-    reward = {"xp": 0, "levels": 0, "cleared_node": False,
-              "boss_down": False, "dormant_bonus": dim, "loot": {},
-              "tier": prog["tier"]}
+    reward = {"xp": 0, "levels": 0, "cleared_layer": False, "layer": layer,
+              "gatekeeper": spec["is_gatekeeper"], "dormant_bonus": dim,
+              "loot": {}, "tier": prog["tier"], "capture_unlocked": False}
     if won:
-        xp_total = int(node["reward_xp"] * mults["xp"]
-                       * (ticker.DORMANT_XP_MULT if dim else 1.0))
+        xp_total = int(spec["reward_xp"] * (ticker.DORMANT_XP_MULT if dim else 1.0))
         xp_each = max(1, xp_total // len(party))
         levels = 0
         for d in party:
             d.wins += 1
-            ev = d.gain_xp(xp_each)
-            levels += ev["levels"]
+            levels += d.gain_xp(xp_each)["levels"]
             d.care["energy"] = max(0, d.care["energy"] - 8)
             db.save_daemon(d)
         reward["xp"] = xp_each
         reward["levels"] = levels
-        if node_index == prog["cleared"]:
-            db.set_progress(r["mac"], node_index + 1,
-                            prog["boss_down"] or node["is_boss"])
-            reward["cleared_node"] = True
-            reward["boss_down"] = bool(node["is_boss"])
-            loot = economy.node_loot(r, node_index, dim, prog)
+        if layer == prog["cleared"] + 1:          # frontier: real progress
+            db.set_progress(r["mac"], layer, layer >= world_mod.LAYERS)
+            reward["cleared_layer"] = True
+            loot = economy.node_loot(r, layer, dim, prog)
             economy.grant(loot)
             reward["loot"] = loot
-            if node["is_boss"]:
+            if layer % world_mod.CAPTURE_EVERY == 0:
+                reward["capture_unlocked"] = True
+                db.add_event("capture_ready",
+                             f"Layer {layer} of {r['world_name']} opens — a "
+                             f"daemon can be drawn out here.", mac=r["mac"])
+            if spec["is_gatekeeper"]:
+                names = ", ".join(d.name for d in party)
+                tier_note = f" (Tier {prog['tier']})" if prog["tier"] else ""
                 db.add_event("boss",
-                             f"{', '.join(d.name for d in party)} defeated "
-                             f"{enemy.name} — {r['world_name']} is stabilized"
-                             f"{f' at Tier {prog['tier']}' if prog['tier'] else ''}.",
+                             f"{names} broke the Gatekeeper at layer {layer} "
+                             f"of {r['world_name']}{tier_note}.",
                              mac=r["mac"], daemon_id=party[0].id)
     else:
         for d in party:
@@ -440,10 +448,7 @@ def battle():
             db.save_daemon(d)
 
     return jsonify({
-        "won": won,
-        "battle": result,
-        "reward": reward,
-        "dormant": dim,
+        "won": won, "battle": result, "reward": reward, "dormant": dim,
         "party": [_daemon_payload(d) for d in party],
         "foes": [f.to_dict() for f in foes],
         "progress": db.get_progress(r["mac"]),
@@ -453,33 +458,34 @@ def battle():
 @app.route("/api/capture", methods=["POST"])
 def capture():
     body = request.get_json(force=True)
-    mac = body.get("mac")
     try:
-        r = generate_rift(mac, body.get("hostname", ""), scan.vendor_for(mac))
+        r = generate_rift(body.get("mac"), body.get("hostname", ""),
+                          scan.vendor_for(body.get("mac")))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     if ticker.dormancy(r["mac"]):
         return jsonify({"error": "rift_dormant",
-                        "message": "The rift is dormant — its device is off the "
-                                   "network. The signature daemon can't be "
-                                   "reached until it returns."}), 400
+                        "message": "The rift is dormant — its device is off "
+                                   "the network. Nothing can be drawn out "
+                                   "until it returns."}), 400
     prog = db.get_progress(r["mac"])
-    if not prog["boss_down"]:
-        return jsonify({"error": "boss_not_defeated",
-                        "message": "Defeat the rift's Gatekeeper to stabilize it "
-                                   "before capturing its signature daemon."}), 400
-    if prog.get("captured"):
-        return jsonify({"error": "already_captured",
-                        "message": "This rift's signature daemon has already been "
-                                   "taken. Overclock the rift for another."}), 400
-    db.set_progress_fields(r["mac"], captured=1)
-    wild = Daemon.from_dict(r["signature_daemon"])
+    if world_mod.captures_available(prog["cleared"], prog["captures_taken"]) <= 0:
+        nxt = (prog["captures_taken"] + 1) * world_mod.CAPTURE_EVERY
+        return jsonify({"error": "no_capture",
+                        "message": f"Dig to layer {nxt} to draw out another "
+                                   f"daemon."}), 400
+    milestone = prog["captures_taken"] + 1
+    wild = world_mod.capture_daemon(r["mac"], milestone, prog["tier"])
     wild.id = None
     db.add_daemon(wild)
-    db.add_event("capture", f"{wild.name} was captured from {r['world_name']} "
-                            "and settles into the Nest.",
-                 mac=r["mac"], daemon_id=wild.id)
-    return jsonify({"daemon": wild.to_dict()})
+    db.set_progress_fields(r["mac"], captures_taken=milestone)
+    db.add_event("capture",
+                 f"{wild.name} was drawn out of {r['world_name']} at layer "
+                 f"{milestone * world_mod.CAPTURE_EVERY} and settles into "
+                 f"the Nest.", mac=r["mac"], daemon_id=wild.id)
+    return jsonify({"daemon": wild.to_dict(),
+                    "captures_available": world_mod.captures_available(
+                        prog["cleared"], milestone)})
 
 
 # -- expeditions & journal --
@@ -497,7 +503,7 @@ def expedition_start():
         r = generate_rift(mac)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    if db.get_progress(r["mac"])["cleared"] >= len(r["nodes"]):
+    if db.get_progress(r["mac"])["cleared"] >= world_mod.LAYERS:
         return jsonify({"error": "already_cleared",
                         "message": "Every node in this rift is already cleared."}), 400
     if any(e["mac"] == r["mac"] for e in db.list_expeditions()):
@@ -548,11 +554,11 @@ def harvest_start():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     prog = db.get_progress(r["mac"])
-    if node_index < 0 or node_index >= len(r["nodes"]):
-        return jsonify({"error": "bad_node"}), 400
-    if node_index >= prog["cleared"]:
-        return jsonify({"error": "node_not_cleared",
-                        "message": "Only cleared nodes can be harvested."}), 400
+    if node_index < 1 or node_index > world_mod.LAYERS:
+        return jsonify({"error": "bad_layer"}), 400
+    if node_index > prog["cleared"]:
+        return jsonify({"error": "layer_not_cleared",
+                        "message": "Only cleared layers can be harvested."}), 400
     if any(h["node_index"] == node_index for h in db.list_harvests(r["mac"])):
         return jsonify({"error": "node_busy",
                         "message": "A daemon is already harvesting that node."}), 400
@@ -717,10 +723,10 @@ def overclock():
         r = generate_rift(mac)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    res = war.overclock(r["mac"], len(r["nodes"]))
+    res = war.overclock(r["mac"], world_mod.LAYERS)
     if not res.get("ok"):
         return jsonify(res), 400
-    db.set_progress_fields(r["mac"], captured=0)
+    db.set_progress_fields(r["mac"], captured=0, captures_taken=0)
     db.add_event("overclock",
                  f"{r['world_name']} has been OVERCLOCKED to Tier {res['tier']} — "
                  f"the rift reboots hungrier and richer.", mac=r["mac"])
@@ -737,7 +743,7 @@ def downclock():
     res = war.downclock(r["mac"])
     if not res.get("ok"):
         return jsonify(res), 400
-    db.set_progress_fields(r["mac"], captured=0)
+    db.set_progress_fields(r["mac"], captured=0, captures_taken=0)
     db.add_event("downclock",
                  f"{r['world_name']} powers down to Tier {res['tier']} — "
                  f"the rift cools and must be retaken.", mac=r["mac"])
