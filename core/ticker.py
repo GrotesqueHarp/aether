@@ -229,6 +229,7 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         d.care["energy"] = max(0, d.care["energy"] - 12)
         boss = node["is_gatekeeper"]
         db.set_progress(mac, layer, layer >= LAYERS)
+        db.bump_layers_dug()
         lvl_txt = f" It reached Lv{d.level}!" if ev["levels"] else ""
         if boss:
             db.add_event("exped_boss",

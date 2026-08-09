@@ -234,6 +234,7 @@ def do_scan():
                 break
             db.upsert_device(d["mac"], d.get("hostname", ""), d.get("ip", ""),
                              d.get("vendor", ""), online=True)
+            db.set_found_at(d["mac"], db.facility_level("array"))
             known.add(d["mac"])
             found.append(d["mac"])
     else:
@@ -247,6 +248,7 @@ def do_scan():
         if d["mac"] in known:
             continue
         db.upsert_device(d["mac"], d["hostname"], d["ip"], d["vendor"], online=True)
+        db.set_found_at(d["mac"], db.facility_level("array"))
         known.add(d["mac"])
         found.append(d["mac"])
 
@@ -488,6 +490,7 @@ def battle():
         reward["levels"] = levels
         if layer == prog["cleared"] + 1:          # frontier: real progress
             db.set_progress(r["mac"], layer, layer >= world_mod.LAYERS)
+            db.bump_layers_dug()
             reward["cleared_layer"] = True
             loot = economy.node_loot(r, layer, dim, prog)
             economy.grant(loot)

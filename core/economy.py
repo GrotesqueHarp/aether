@@ -56,9 +56,15 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     bits_hr = (6.0 + depth_factor * 3.2) * power_factor * mult
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
     out = {"bits": bits_hr, f"essence.{essence_kind}": bits_hr / 10.0}
+    # Cores trickle from depth, not just from Gatekeepers. They gate every
+    # facility past level 4 and every Overclock, and when they came only from
+    # boss layers the whole economy could jam behind one unbeatable fight.
+    # A shallow post yields almost nothing; a deep one is a genuine supply.
+    core_rate = (layer / 100.0) * (0.25 + rift["depth"] * 0.03) * mult
     if is_gatekeeper(layer):
-        out["cores"] = (0.6 + rift["depth"] * 0.05) / 24.0 * mult
-        out["bits"] *= 0.5
+        core_rate *= 2.5
+        out["bits"] *= 0.6
+    out["cores"] = core_rate
     return out
 
 
@@ -96,7 +102,7 @@ def node_loot(rift: dict, node_index: int, dormant: bool,
     loot = {"bits": round((3 + lvl * 0.7) * mult * LOOT_MULT, 1),
             f"essence.{essence_kind}": round((0.5 + lvl * 0.15) * mult * LOOT_MULT, 1)}
     if is_gatekeeper(layer):
-        loot["cores"] = round(0.5 * (1 + progress.get("tier", 0) * 0.5), 1)
+        loot["cores"] = round(1.5 * (1 + progress.get("tier", 0) * 0.5), 1)
     return loot
 
 
@@ -179,8 +185,8 @@ def sell_value(d) -> dict:
 # unreachable. It also gives the Bits pile-up an actual sink.
 TRANSMUTE_RATIO = float(os.environ.get("AETHER_TRANSMUTE_RATIO", "0.55"))
 TRANSMUTE_BITS_PER = float(os.environ.get("AETHER_TRANSMUTE_BITS", "14"))
-RECLAIM_ESSENCE = float(os.environ.get("AETHER_RECLAIM_ESSENCE", "45"))
-RECLAIM_BITS = float(os.environ.get("AETHER_RECLAIM_BITS", "900"))
+RECLAIM_ESSENCE = float(os.environ.get("AETHER_RECLAIM_ESSENCE", "30"))
+RECLAIM_BITS = float(os.environ.get("AETHER_RECLAIM_BITS", "600"))
 
 
 def transmute_cost(from_kind: str, to_kind: str, out_amount: float) -> dict:

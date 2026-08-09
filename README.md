@@ -179,6 +179,49 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## The long sky (v0.9.2)
+
+Resolving every rift is meant to be the work of a year or more, not a weekend.
+
+**Rifts found later are harder.** Each device records the Array level it was
+resolved at, and that adds directly to the rift's depth rating — so a rift
+found at Array L8 is markedly deeper and meaner than one found at L0, all the
+way down its hundred layers. Discovery is a difficulty curve, not just a
+content unlock.
+
+**The Array is gated on digging, not money.** Each level requires a lifetime
+layer count dug network-wide (~55 at L1, 1,490 at L5, 6,171 at L10), on top of
+a cost curve that grows ×2.35 per level and starts demanding Cores at L2 and
+Aethercite at L6 — and Aethercite only comes from holding off the Null, so the
+deep sky opens only to someone who can defend what they already have.
+
+The layer count is **lifetime** rather than current depth: Overclocking resets
+a rift to layer 0, and summing live depth would mean pushing a tier erased your
+progress toward the Array — and would cap you below the requirement entirely
+once it exceeded rifts x 100.
+
+At the digging rate observed in simulation, Array L5 is ~5 months and L10 is
+well over a year; even at triple that rate L12 is ~325 days. Knobs:
+`AETHER_ARRAY_GATE_BASE`, `AETHER_ARRAY_GATE_POWER`,
+`AETHER_ARRAY_COST_GROWTH`, `AETHER_DISCOVERY_DEPTH`.
+
+## Core supply and hall staffing (v0.9.1)
+
+**Cores trickle from depth.** They used to come only from Gatekeeper layers,
+which sit at 25/50/75/100 — so the entire economy could jam behind one
+unbeatable fight, since Cores gate every facility past level 4 and every
+Overclock. Now every harvest post yields Cores in proportion to its depth: a
+shelf at layer 5 gives ~0.3/day, layer 50 gives ~8, layer 100 gives ~17.
+Gatekeeper shelves still pay 2.5x. Breaking a Gatekeeper drops 1.5 Cores, and
+Crucible reclamation is cheaper (600 Bits + 30 essence).
+
+**Fill training halls before harvest posts.** Hall slots are few and bounded;
+harvest posts are effectively unlimited, so harvesting quietly ate every
+daemon and party power stopped growing. Halls first, harvest with the rest.
+
+Over 21 simulated days this took party power from 1,372 to 10,559, started
+hall training on day 0.7 instead of never, and removed the last stall.
+
 ## The Array, and where resources come from (v0.9)
 
 **Presence is gone.** Rifts no longer wink out when a device leaves your

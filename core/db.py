@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -86,13 +86,23 @@ def _migrate_5_to_6(c: sqlite3.Connection):
                   (layers, 1 if row["captured"] else 0, row["mac"]))
 
 
+def _migrate_6_to_7(c: sqlite3.Connection):
+    """v0.9.1 -> v0.9.2: devices.found_at — the Array level a rift was
+    resolved at. Later discoveries are deeper and meaner, so this has to be
+    remembered rather than recomputed."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(devices)")}
+    if "found_at" not in cols:
+        c.execute("ALTER TABLE devices ADD COLUMN found_at INTEGER NOT NULL DEFAULT 0")
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
     3: _migrate_3_to_4,
     4: _migrate_4_to_5,
     5: _migrate_5_to_6,
-    # 6: _migrate_6_to_7,   <- next schema change goes here
+    6: _migrate_6_to_7,
+    # 7: _migrate_7_to_8,   <- next schema change goes here
 }
 
 
@@ -135,7 +145,8 @@ def init_db():
                 vendor TEXT DEFAULT '',
                 first_seen REAL NOT NULL,
                 last_seen REAL NOT NULL,
-                online INTEGER NOT NULL DEFAULT 1
+                online INTEGER NOT NULL DEFAULT 1,
+                found_at INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -593,6 +604,26 @@ def list_eggs(incubating_only: bool = True) -> list[dict]:
 def hatch_egg_row(egg_id: int):
     with _conn() as c:
         c.execute("UPDATE eggs SET state = 'hatched' WHERE id = ?", (egg_id,))
+
+
+def total_layers_cleared() -> int:
+    """LIFETIME layers dug across every rift.
+
+    Counted cumulatively rather than summed from current depth, because
+    Overclocking resets a rift to layer 0 — summing live depth would mean
+    pushing a tier erased your progress toward the Array, and the requirement
+    would be unreachable once it exceeded (rifts x 100).
+    """
+    return int(float(get_meta("layers_dug", "0") or 0))
+
+
+def bump_layers_dug(n: int = 1):
+    set_meta("layers_dug", str(total_layers_cleared() + n))
+
+
+def set_found_at(mac: str, level: int):
+    with _conn() as c:
+        c.execute("UPDATE devices SET found_at = ? WHERE mac = ?", (level, mac))
 
 
 # --- reset ------------------------------------------------------------------

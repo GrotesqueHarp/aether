@@ -102,7 +102,7 @@ class PlayerPolicy(Policy):
                  max_dig_per_session: int = 30,
                  overclock_lookahead: float = 0.5,
                  use_downclock: bool = True,
-                 max_roster: int = 8,
+                 max_roster: int = 20,
                  fighters: int = 3, harvest_share: float = 0.6):
         self.sessions_per_day = sessions_per_day
         self.actions_per_session = actions_per_session
@@ -305,7 +305,24 @@ class PlayerPolicy(Policy):
         spare = [d for d in pool if not self._busy(sim, d)]
         if not spare:
             return
-        n_harvest = round(len(spare) * self.harvest_share)
+        # Hall slots are few and bounded; harvest posts are effectively
+        # unlimited. Fill the halls FIRST or harvesting quietly eats every
+        # daemon and party power stops growing altogether.
+        for d in list(spare):
+            if not self._budget():
+                break
+            for hall in self.build_order:
+                if hall not in sim.bastion.HALLS:
+                    continue
+                lvl = sim.db.facility_level(hall)
+                if lvl and len(sim.db.list_training(hall)) < sim.bastion.hall_slots(lvl):
+                    st, _ = self._post(sim, "/api/bastion/train",
+                                       {"daemon_id": d.id, "hall": hall})
+                    if st == 200:
+                        self.note(sim, "assign", f"{d.name[:8]} -> {hall}")
+                        spare.remove(d)
+                    break
+        n_harvest = len(spare)
         # harvest posts sit on shelves — every 10th cleared layer. Deeper
         # shelves pay far more, so fill from the bottom up.
         open_nodes = []

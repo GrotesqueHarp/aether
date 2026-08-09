@@ -8,6 +8,8 @@ deterministic: re-scanning your network regenerates the exact same worlds.
 
 from __future__ import annotations
 
+import os
+
 from . import content
 from .seed import rift_rng, oui, normalize_mac, Rng, _digest
 from .daemon import generate_daemon
@@ -27,6 +29,23 @@ def world_name(mac: str) -> str:
     return f"The {r.choice(content.WORLD_ADJ)} {r.choice(content.WORLD_NOUN)}"
 
 
+DISCOVERY_DEPTH_STEP = float(os.environ.get("AETHER_DISCOVERY_DEPTH", "1.6"))
+
+
+def discovery_tier(mac: str) -> int:
+    """The Array level this rift was resolved at. Reading it here keeps every
+    caller — layer_spec, layer_enemies, harvest rates — automatically aware
+    that a late find is a harder world, without threading it through by hand."""
+    try:
+        from . import db
+        dev = db.get_device(mac)
+        if dev is None:
+            return 0
+        return int(dev["found_at"] or 0)
+    except Exception:
+        return 0
+
+
 def generate_rift(mac: str, hostname: str = "", vendor: str = "") -> dict:
     """Full world descriptor for a device."""
     mac = normalize_mac(mac)
@@ -35,7 +54,9 @@ def generate_rift(mac: str, hostname: str = "", vendor: str = "") -> dict:
     r = rift_rng(mac)
 
     # difficulty scales with a seeded "depth" so some devices are tougher rifts
-    depth = r.randint(1, 10)
+    # seeded base difficulty, plus everything the Array had to reach past to
+    # hear this one at all
+    depth = r.randint(1, 10) + round(DISCOVERY_DEPTH_STEP * discovery_tier(mac))
 
     # habitats: a few themed zones, each favoring the biome's elements
     n_hab = r.randint(2, 4)

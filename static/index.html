@@ -821,6 +821,7 @@ async function bastionView(){
         <div class="fhead"><h3>${f.name}</h3><span class="flevel">${f.level===0?'UNBUILT':'LV '+f.level}</span></div>
         <div class="fdesc">${f.desc}</div>
         <div class="feffect">${f.effect}</div>
+        ${f.gate?`<div class="mono" style="font-size:10.5px;color:var(--warn)">locked · dig ${fmt(f.gate.need_layers)} layers network-wide (${fmt(f.gate.have_layers)} so far)</div>`:''}
         ${occHtml}
         <div style="display:flex;align-items:center;gap:10px;margin-top:auto">
           <button class="btn ${f.level===0?'primary':''}" data-upgrade="${key}" ${affordable?'':'disabled'}>${f.level===0?'Build':'Upgrade'}</button>

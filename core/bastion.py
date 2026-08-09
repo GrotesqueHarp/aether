@@ -86,6 +86,9 @@ HALLS = {k: v for k, v in FACILITIES.items() if v["kind"] == "hall"}
 
 
 # ----------------------------------------------------------------- levels ---
+ARRAY_COST_GROWTH = float(os.environ.get("AETHER_ARRAY_COST_GROWTH", "2.35"))
+ARRAY_GATE_BASE = float(os.environ.get("AETHER_ARRAY_GATE_BASE", "55"))
+ARRAY_GATE_POWER = float(os.environ.get("AETHER_ARRAY_GATE_POWER", "2.05"))
 ARRAY_BASE_SLOTS = int(os.environ.get("AETHER_ARRAY_BASE", "3"))
 ARRAY_PER_LEVEL = int(os.environ.get("AETHER_ARRAY_PER_LEVEL", "2"))
 
@@ -101,10 +104,17 @@ def upgrade_cost(key: str, level: int) -> dict:
     if key == "array":
         # Bits-only for the first few levels: the Array is how you reach the
         # essences you don't have yet, so it must never be gated behind one.
-        cost = {"bits": round(f["base_bits"] * (1.75 ** level), 1)}
-        if level >= 3:
-            cost["cores"] = float(level - 2)
+        # After that the curve gets deliberately brutal — resolving the whole
+        # sky is meant to be the work of a year, not a weekend.
+        cost = {"bits": round(f["base_bits"] * (ARRAY_COST_GROWTH ** level), 1)}
+        if level >= 2:
+            cost["cores"] = float(round(2 * (1.45 ** (level - 2))))
+        if level >= 6:
+            # Aethercite only comes from holding off the Null, so the deep sky
+            # opens only to someone who can defend what they already have
+            cost["aethercite"] = float(level - 5)
         return cost
+
     cost = {"bits": round(f["base_bits"] * scale, 1),
             f"essence.{f['essence']}": round(f["base_bits"] / 8 * scale, 1)}
     if level >= 4:                      # cores join the bill at level 5+
@@ -112,10 +122,31 @@ def upgrade_cost(key: str, level: int) -> dict:
     return cost
 
 
+def array_required_layers(level: int) -> int:
+    """Layers you must have dug NETWORK-WIDE before the Array will resolve
+    another rift. Money alone shouldn't buy the sky — depth should."""
+    if level <= 0:
+        return 0
+    return int(ARRAY_GATE_BASE * (level ** ARRAY_GATE_POWER))
+
+
+def array_gate(level: int) -> dict | None:
+    """None if the next level is unlocked, else what's still missing."""
+    need = array_required_layers(level)
+    have = db.total_layers_cleared()
+    if have >= need:
+        return None
+    return {"need_layers": need, "have_layers": have}
+
+
 def upgrade(key: str) -> dict:
     if key not in FACILITIES:
         return {"ok": False, "reason": "bad_facility"}
     lvl = db.facility_level(key)
+    if key == "array":
+        gate = array_gate(lvl)
+        if gate:
+            return {"ok": False, "reason": "needs_depth", **gate}
     cost = upgrade_cost(key, lvl)
     if not db.res_spend(cost):
         return {"ok": False, "reason": "cant_afford", "cost": cost}
@@ -160,7 +191,10 @@ def effect_line(key: str, lvl: int) -> str:
     if f["kind"] == "hall":
         return f"{hall_slots(lvl)} slot(s) · +{hall_rate(lvl):.1f} {f['stat'].upper()}/h"
     if key == "array":
-        return f"{array_capacity(lvl)} rifts resolvable"
+        gate = array_gate(lvl)
+        extra = (f" · next needs {gate['need_layers']} layers dug "
+                 f"({gate['have_layers']} so far)") if gate else ""
+        return f"{array_capacity(lvl)} rifts resolvable{extra}"
     if key == "hatchery_wing":
         return f"incubation ×{incubation_mult():.2f}"
     if key == "auto_feeder":
