@@ -1,0 +1,49 @@
+# AETHER — docker compose setup
+#
+#   docker compose up -d
+#   -> open http://<host-ip>:8787 from any device on your network
+#
+# host networking is REQUIRED for real LAN scanning: it gives the container
+# your machine's actual ARP table. It also means no port mapping is needed —
+# AETHER binds host port 8787 directly (change via AETHER_PORT below).
+
+services:
+  aether:
+    build: .
+    container_name: aether
+    network_mode: host          # <- the important line: real LAN visibility
+    restart: unless-stopped
+    environment:
+      AETHER_PORT: "8787"
+      AETHER_DB: /data/aether.db
+      # World-clock tuning (seconds) — uncomment to speed up for testing:
+      # AETHER_TICK: "5"
+      # AETHER_FIGHT_EVERY: "20"
+      # AETHER_PRESENCE_EVERY: "30"
+      # AETHER_PRESENCE_GRACE: "60"
+    volumes:
+      - aether_data:/data
+
+volumes:
+  aether_data:
+
+# ---------------------------------------------------------------------------
+# Bridged fallback (Docker Desktop on macOS/Windows, or if you can't use host
+# networking): the game runs fine but auto-scan only sees Docker's internal
+# network — add your devices manually by MAC ("Add device" in the UI), which
+# generates their full worlds identically. Presence tracking will mark manual
+# rifts dormant since their MACs never appear in the container's ARP table;
+# raise AETHER_PRESENCE_GRACE to a huge value to keep them awake.
+#
+# services:
+#   aether:
+#     build: .
+#     container_name: aether
+#     ports:
+#       - "8787:8787"
+#     restart: unless-stopped
+#     environment:
+#       AETHER_DB: /data/aether.db
+#       AETHER_PRESENCE_GRACE: "31536000"   # manual rifts stay awake ~forever
+#     volumes:
+#       - aether_data:/data

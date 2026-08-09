@@ -1,0 +1,14 @@
+# keep the build context lean
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+aether.db
+server.log
+*.png
+.git/
+.gitignore
+Dockerfile
+docker-compose.yml
+install.sh
+README.md

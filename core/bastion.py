@@ -1,0 +1,225 @@
+"""
+bastion.py — Base building on your Anchor device.
+
+Nine facilities in four families:
+
+  Training halls  the Forge (ATK) / Bulwark (DEF) / Circuit (SPD) / Core
+                  Chamber (HP). Slot a daemon in and it gains permanent base
+                  stat points over real hours — this is what "automates away"
+                  click-training. Slots and rates grow with level.
+  Support         Hatchery Wing (faster incubation).
+  Automations     Auto-Feeder / Playroom / Cleansing Font — they buy back your
+                  attention by softening the care drift.
+  War             the Aegis — empowers defenders during Null incursions.
+
+Costs follow the incremental curve (base × 1.55^level) in Bits + a themed
+essence, with Cores joining the bill from level 5 up, so there is always a
+next purchase and Cores finally have a sink.
+"""
+
+from __future__ import annotations
+
+import os
+import time
+
+from . import db
+from .daemon import Daemon, STAT_KEYS
+
+TRAIN_MULT = float(os.environ.get("AETHER_TRAIN_MULT", "1.0"))
+
+FACILITIES = {
+    "forge": {
+        "name": "The Forge", "kind": "hall", "stat": "atk", "essence": "ferro",
+        "desc": "Hammer-song and sparks. Daemons here gain ATK over time.",
+        "base_bits": 200,
+    },
+    "bulwark": {
+        "name": "The Bulwark", "kind": "hall", "stat": "def", "essence": "loam",
+        "desc": "Weight training against packed-earth firewalls. Gains DEF.",
+        "base_bits": 200,
+    },
+    "circuit": {
+        "name": "The Circuit", "kind": "hall", "stat": "spd", "essence": "volt",
+        "desc": "An endless lightning track. Gains SPD.",
+        "base_bits": 200,
+    },
+    "core_chamber": {
+        "name": "The Core Chamber", "kind": "hall", "stat": "hp", "essence": "tide",
+        "desc": "Deep pressure conditioning. Gains HP.",
+        "base_bits": 200,
+    },
+    "hatchery_wing": {
+        "name": "Hatchery Wing", "kind": "support", "essence": "plasma",
+        "desc": "Warm coils around the eggs. Each level incubates 6% faster.",
+        "base_bits": 300,
+    },
+    "auto_feeder": {
+        "name": "Auto-Feeder", "kind": "automation", "essence": "loam",
+        "desc": "Rations on a timer. Each level slows hunger drift 12%.",
+        "base_bits": 250,
+    },
+    "playroom": {
+        "name": "Playroom", "kind": "automation", "essence": "plasma",
+        "desc": "Bouncing packets and chase-loops. Sets a happiness floor.",
+        "base_bits": 250,
+    },
+    "cleansing_font": {
+        "name": "Cleansing Font", "kind": "automation", "essence": "umbra",
+        "desc": "Umbra turned against itself. Passively drains corruption.",
+        "base_bits": 350,
+    },
+    "aegis": {
+        "name": "The Aegis", "kind": "war", "essence": "umbra",
+        "desc": "A lattice of wards. Defenders fight 6% stronger per level "
+                "during Null incursions.",
+        "base_bits": 500,
+    },
+}
+HALLS = {k: v for k, v in FACILITIES.items() if v["kind"] == "hall"}
+
+
+# ----------------------------------------------------------------- levels ---
+def upgrade_cost(key: str, level: int) -> dict:
+    f = FACILITIES[key]
+    scale = 1.55 ** level
+    cost = {"bits": round(f["base_bits"] * scale, 1),
+            f"essence.{f['essence']}": round(f["base_bits"] / 8 * scale, 1)}
+    if level >= 4:                      # cores join the bill at level 5+
+        cost["cores"] = float(level - 3)
+    return cost
+
+
+def upgrade(key: str) -> dict:
+    if key not in FACILITIES:
+        return {"ok": False, "reason": "bad_facility"}
+    lvl = db.facility_level(key)
+    cost = upgrade_cost(key, lvl)
+    if not db.res_spend(cost):
+        return {"ok": False, "reason": "cant_afford", "cost": cost}
+    db.set_facility_level(key, lvl + 1)
+    return {"ok": True, "level": lvl + 1, "cost": cost}
+
+
+def snapshot() -> dict:
+    """Everything the Bastion view needs in one payload."""
+    levels = db.all_facility_levels()
+    out = {}
+    for key, f in FACILITIES.items():
+        lvl = levels.get(key, 0)
+        out[key] = {
+            **{k: f[k] for k in ("name", "kind", "desc", "essence")},
+            "stat": f.get("stat"),
+            "level": lvl,
+            "next_cost": upgrade_cost(key, lvl),
+            "effect": effect_line(key, lvl),
+        }
+        if f["kind"] == "hall":
+            out[key]["slots"] = hall_slots(lvl)
+            out[key]["rate_per_hour"] = round(hall_rate(lvl), 2)
+            out[key]["occupants"] = []
+            for t in db.list_training(key):
+                d = db.get_daemon(t["daemon_id"])
+                if d:
+                    out[key]["occupants"].append({
+                        "daemon_id": d.id, "name": d.name,
+                        "color": d.to_dict()["color"],
+                        "gained": t["gained"],
+                        "hours": round((time.time() - t["started"]) / 3600, 1),
+                    })
+    return out
+
+
+def effect_line(key: str, lvl: int) -> str:
+    if lvl == 0:
+        return "not built"
+    f = FACILITIES[key]
+    if f["kind"] == "hall":
+        return f"{hall_slots(lvl)} slot(s) · +{hall_rate(lvl):.1f} {f['stat'].upper()}/h"
+    if key == "hatchery_wing":
+        return f"incubation ×{incubation_mult():.2f}"
+    if key == "auto_feeder":
+        return f"hunger drift ×{hunger_drift_mult():.2f}"
+    if key == "playroom":
+        return f"happiness floor {happiness_floor()}"
+    if key == "cleansing_font":
+        return f"-{corruption_drain_per_hour():.1f} corruption/h"
+    if key == "aegis":
+        return f"defenders +{lvl * 6}% in incursions"
+    return f"level {lvl}"
+
+
+# ------------------------------------------------------------ hall mechanics -
+def hall_slots(lvl: int) -> int:
+    return 0 if lvl == 0 else 1 + (lvl - 1) // 3
+
+
+def hall_rate(lvl: int) -> float:
+    """Permanent base-stat points per hour."""
+    return 0.0 if lvl == 0 else (0.8 + 0.35 * lvl) * TRAIN_MULT
+
+
+def assign(daemon_id: int, hall: str) -> dict:
+    if hall not in HALLS:
+        return {"ok": False, "reason": "bad_hall"}
+    lvl = db.facility_level(hall)
+    if lvl == 0:
+        return {"ok": False, "reason": "not_built"}
+    if len(db.list_training(hall)) >= hall_slots(lvl):
+        return {"ok": False, "reason": "hall_full"}
+    db.start_training(daemon_id, hall)
+    return {"ok": True}
+
+
+def tick_training(now: float | None = None):
+    """Accrue fractional stat points; bank whole points into base stats.
+    Training drains energy slowly; exhausted daemons rest in place."""
+    now = now or time.time()
+    for t in db.list_training():
+        d = db.get_daemon(t["daemon_id"])
+        if not d:
+            db.end_training(t["daemon_id"])
+            continue
+        hall = HALLS.get(t["hall"])
+        if not hall:
+            db.end_training(t["daemon_id"])
+            continue
+        hours = max(0.0, (now - t["last_tick"]) / 3600.0)
+        if hours <= 0:
+            continue
+        if d.care["energy"] < 8:                       # rest instead
+            d.care["energy"] = min(100, d.care["energy"] + 8 * hours)
+            db.save_daemon(d)
+            db.update_training(d.id, last_tick=now)
+            continue
+        banked = t["banked"] + hall_rate(db.facility_level(t["hall"])) * hours
+        whole = int(banked)
+        if whole > 0:
+            d.base_stats[hall["stat"]] += whole
+            d.care["discipline"] = min(100, d.care["discipline"] + whole * 0.8)
+        d.care["energy"] = max(0, d.care["energy"] - 2.0 * hours)
+        d.care["hunger"] = max(0, d.care["hunger"] - 1.5 * hours)
+        db.save_daemon(d)
+        db.update_training(d.id, last_tick=now, banked=banked - whole,
+                          gained=t["gained"] + whole)
+
+
+# ------------------------------------------------- automation drift effects --
+def hunger_drift_mult() -> float:
+    return max(0.15, 1 - 0.12 * db.facility_level("auto_feeder"))
+
+
+def happiness_floor() -> int:
+    lvl = db.facility_level("playroom")
+    return 0 if lvl == 0 else min(60, 22 + 3 * lvl)
+
+
+def corruption_drain_per_hour() -> float:
+    return 1.5 * db.facility_level("cleansing_font")
+
+
+def incubation_mult() -> float:
+    return max(0.2, 0.94 ** db.facility_level("hatchery_wing"))
+
+
+def aegis_power_mult() -> float:
+    return 1 + 0.06 * db.facility_level("aegis")

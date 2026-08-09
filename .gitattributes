@@ -1,0 +1,32 @@
+# Normalize line endings so files authored on Windows still work on Linux.
+# Without this, Git for Windows checks out CRLF and shell scripts fail on the
+# server with "bad interpreter: /bin/bash^M".
+
+# Default: let Git decide, but always store LF in the repo.
+* text=auto eol=lf
+
+# These MUST be LF regardless of platform — they run on Linux.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+VERSION         text eol=lf
+requirements.txt text eol=lf
+
+# Python / web sources: LF keeps diffs clean across machines.
+*.py            text eol=lf
+*.html          text eol=lf
+*.css           text eol=lf
+*.js            text eol=lf
+*.md            text eol=lf
+
+# Vendored third-party code — never edited by us, so don't normalize it.
+# (Also avoids noisy CRLF warnings from packaging metadata on first commit.)
+vendor/** -text
+
+# Binary — never touch these.
+*.png           binary
+*.jpg           binary
+*.gif           binary
+*.zip           binary
+*.db            binary

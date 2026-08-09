@@ -1,0 +1,28 @@
+# --- game state (never commit your save) ---
+aether.db
+aether.db-journal
+aether.db-wal
+aether.db-shm
+dev-data/
+data/
+
+# --- runtime / local ---
+server.log
+*.log
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# --- editor / OS noise ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# NOTE: vendor/ is intentionally NOT ignored. Committing it is what makes the
+# repo self-contained — clone and run, no pip required.

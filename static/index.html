@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AETHER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E1420; --surface:#161E2E; --surface2:#1C2637; --hair:#26324A;
+  --text:#DCE3EE; --muted:#8394AD; --dim:#5C6B84;
+  --aether:#8B7CF6; --aether-dim:#6455c9; --online:#3FD08A; --warn:#E8B54D; --danger:#F0714A;
+  --r:10px;
+  --display:'Space Grotesk',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(139,124,246,.10), transparent 60%),
+    var(--bg);
+  color:var(--text); font-family:var(--body); font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button{font-family:inherit;cursor:pointer}
+h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+
+/* ---- shell ---- */
+.app{display:grid;grid-template-columns:216px 1fr;min-height:100vh}
+.rail{
+  border-right:1px solid var(--hair);padding:22px 16px;display:flex;flex-direction:column;gap:6px;
+  position:sticky;top:0;height:100vh;
+}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:26px;padding:0 6px}
+.brand .logo{width:30px;height:30px}
+.brand b{font-family:var(--display);font-size:19px;letter-spacing:.14em;font-weight:700}
+.navitem{
+  display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:var(--r);
+  color:var(--muted);font-weight:500;border:1px solid transparent;user-select:none;
+}
+.navitem:hover{background:var(--surface);color:var(--text)}
+.navitem.active{background:var(--surface);color:var(--text);border-color:var(--hair)}
+.navitem svg{width:18px;height:18px;flex:none}
+.rail .foot{margin-top:auto;font-size:11.5px;line-height:1.7}
+.rail .foot .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--online);margin-right:6px;box-shadow:0 0 8px var(--online)}
+
+.main{padding:26px 34px 60px;max-width:1120px}
+.topbar{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px;gap:20px;flex-wrap:wrap}
+.topbar .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--aether);text-transform:uppercase}
+.topbar h1{font-size:27px;margin-top:3px}
+.topbar .net{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+
+/* ---- generic bits ---- */
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r)}
+.grid{display:grid;gap:14px}
+.btn{
+  background:var(--surface2);border:1px solid var(--hair);color:var(--text);
+  padding:9px 15px;border-radius:8px;font-weight:600;font-size:13.5px;transition:.12s;
+}
+.btn:hover{border-color:var(--aether-dim);background:#212c40}
+.btn.primary{background:var(--aether);border-color:var(--aether);color:#0b0f18}
+.btn.primary:hover{background:#9c8ff8;filter:brightness(1.03)}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.chip{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--hair);color:var(--muted);white-space:nowrap}
+.attr-Vaccine{color:#7FCBEB} .attr-Data{color:#8FD6B4} .attr-Virus{color:#E86AD0}
+.stars{color:var(--warn);letter-spacing:2px;font-size:12px}
+
+/* ---- rift grid ---- */
+.rift-grid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.rift{padding:16px;display:flex;flex-direction:column;gap:12px;cursor:pointer;transition:.14s;position:relative;overflow:hidden}
+.rift:hover{border-color:var(--aether-dim);transform:translateY(-2px)}
+.rift .sigwrap{display:flex;gap:13px;align-items:center}
+.rift .sig{width:56px;height:56px;flex:none;border-radius:10px;background:#0c1220;border:1px solid var(--hair)}
+.rift h3{font-size:16px;line-height:1.2}
+.rift .host{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
+.rift .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.rift .biomebar{height:3px;border-radius:2px;margin-top:2px}
+.progress-mini{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.progress-mini > i{display:block;height:100%;background:var(--aether)}
+
+/* ---- meters ---- */
+.meter{display:grid;grid-template-columns:64px 1fr 34px;align-items:center;gap:9px;font-size:12px}
+.meter .track{height:7px;background:#0c1220;border-radius:4px;overflow:hidden}
+.meter .track > i{display:block;height:100%;border-radius:4px}
+
+/* ---- daemon card ---- */
+.daemon{padding:16px;display:flex;flex-direction:column;gap:13px}
+.daemon .head{display:flex;gap:13px;align-items:flex-start}
+.daemon .sig{width:60px;height:60px;flex:none;border-radius:10px;background:#0c1220;border:1px solid var(--hair)}
+.daemon .title{flex:1;min-width:0}
+.daemon .title h3{font-size:17px}
+.daemon .lvl{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.statline{display:flex;gap:14px;font-family:var(--mono);font-size:12px;flex-wrap:wrap}
+.statline b{color:var(--text)}
+.xpbar{height:5px;background:#0c1220;border-radius:3px;overflow:hidden}
+.xpbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--aether-dim),var(--aether))}
+.actions{display:flex;gap:7px;flex-wrap:wrap}
+.actions .btn{padding:7px 11px;font-size:12.5px}
+
+/* ---- battle theatre ---- */
+.overlay{position:fixed;inset:0;background:rgba(6,9,15,.78);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+.theatre{width:min(680px,96vw);max-height:90vh;overflow:auto}
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;padding:18px}
+.fighter{text-align:center}
+.fighter .sig{width:74px;height:74px;margin:0 auto 8px;border-radius:12px;background:#0c1220;border:1px solid var(--hair)}
+.hpbar{height:9px;background:#0c1220;border-radius:5px;overflow:hidden;margin-top:7px}
+.hpbar>i{display:block;height:100%;background:var(--online);transition:width .28s}
+.hpbar.foe>i{background:var(--danger)}
+.vs .versus{font-family:var(--display);color:var(--muted);font-size:13px;letter-spacing:.2em}
+.log{font-family:var(--mono);font-size:12.5px;padding:14px 18px;border-top:1px solid var(--hair);max-height:210px;overflow:auto}
+.log .row{padding:3px 0;color:var(--muted)}
+.log .row .a{color:var(--online)} .log .row .b{color:var(--danger)}
+.log .row .crit{color:var(--warn);font-weight:700}
+.result{padding:16px 18px;text-align:center;border-top:1px solid var(--hair)}
+.result h2{font-size:22px}
+.result.win h2{color:var(--online)} .result.lose h2{color:var(--danger)}
+
+/* ---- misc layout ---- */
+.section-title{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:26px 0 12px}
+.empty{padding:50px 20px;text-align:center;color:var(--muted);border:1px dashed var(--hair);border-radius:var(--r)}
+.node-chain{display:flex;gap:0;align-items:stretch;overflow-x:auto;padding-bottom:6px}
+.node{min-width:132px;padding:13px;border:1px solid var(--hair);border-radius:10px;margin-right:10px;background:var(--surface);position:relative}
+.node.cleared{border-color:var(--online)}
+.node.boss{border-color:var(--warn)}
+.node.locked{opacity:.5}
+.node .n-lvl{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.node .n-name{font-weight:600;font-size:13.5px;margin:3px 0}
+.picker{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+.pick{padding:8px 12px;border:1px solid var(--hair);border-radius:9px;cursor:pointer;display:flex;gap:8px;align-items:center;font-size:13px}
+.pick:hover,.pick.sel{border-color:var(--aether);background:var(--surface2)}
+.pick .dot{width:9px;height:9px;border-radius:50%}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--hair);padding:11px 18px;border-radius:10px;font-size:13.5px;z-index:60;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.spin{width:26px;height:26px;border:2px solid var(--hair);border-top-color:var(--aether);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ---- dormancy ---- */
+.rift.dormant{border-color:#3a3358}
+.rift.dormant .sig{filter:grayscale(.55) brightness(.7)}
+.rift.dormant h3{color:var(--muted)}
+.chip.dormant-chip{color:#8B7CF6;border-color:#3a3358}
+.chip.online-chip{color:var(--online)}
+.pulse-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.pulse-dot.on{background:var(--online);box-shadow:0 0 7px var(--online)}
+.pulse-dot.off{background:#4a4370}
+
+/* ---- journal ---- */
+.journal{max-width:680px}
+.jrow{display:flex;gap:13px;padding:11px 14px;border-left:2px solid var(--hair);margin-bottom:2px;background:var(--surface);border-radius:0 8px 8px 0}
+.jrow .jtime{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:nowrap;padding-top:2px;min-width:58px}
+.jrow .jtext{font-size:13.5px}
+.jrow.k-presence_dark{border-left-color:#8B7CF6}
+.jrow.k-presence_wake{border-left-color:var(--online)}
+.jrow.k-exped_win,.jrow.k-exped_boss,.jrow.k-exped_done,.jrow.k-boss{border-left-color:var(--online)}
+.jrow.k-exped_routed,.jrow.k-care_warn{border-left-color:var(--danger)}
+.jrow.k-exped_start,.jrow.k-exped_recall{border-left-color:var(--aether)}
+.jrow.k-rift_found,.jrow.k-capture,.jrow.k-hatch,.jrow.k-evolve{border-left-color:var(--warn)}
+
+/* ---- expedition badge ---- */
+.away{font-family:var(--mono);font-size:11px;color:var(--aether);border:1px solid var(--aether-dim);border-radius:999px;padding:2px 9px}
+.daemon.is-away{opacity:.75}
+.daemon.is-away .actions .btn{pointer-events:none;opacity:.35}
+
+/* ---- resource bar ---- */
+.resbar{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:10px 34px;border-bottom:1px solid var(--hair);background:rgba(22,30,46,.6);position:sticky;top:0;z-index:20;backdrop-filter:blur(6px);min-height:22px}
+.res{display:flex;align-items:baseline;gap:7px;font-family:var(--mono);font-size:12.5px}
+.res .rname{color:var(--dim);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+.res .rval{color:var(--text);font-weight:700;transition:.2s}
+.res .rval.bump{color:var(--online)}
+.res .rrate{color:var(--online);font-size:10.5px}
+.res .rdot{width:7px;height:7px;border-radius:50%;align-self:center}
+
+/* ---- harvest UI on nodes ---- */
+.node .hv{margin-top:8px;padding-top:8px;border-top:1px dashed var(--hair);font-size:11px}
+.node .hv .hv-who{display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px}
+.node .hv .hv-rate{font-family:var(--mono);color:var(--online);font-size:10px;margin-top:3px}
+.node .hv .hv-life{font-family:var(--mono);color:var(--dim);font-size:10px}
+.node .hv button{margin-top:6px;font-size:10.5px;padding:4px 8px}
+.node select{width:100%;margin-top:6px;background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:6px;padding:5px;font-size:11px}
+
+/* ---- hatchery ---- */
+.hatchery{padding:16px}
+.egg-row{display:flex;align-items:center;gap:13px;padding:10px 0;border-top:1px solid var(--hair)}
+.egg-svg{width:44px;height:44px;flex:none}
+.eggbar{height:6px;background:#0c1220;border-radius:3px;overflow:hidden;margin-top:5px}
+.eggbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--warn),var(--aether))}
+.synth{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.synth .pick{flex-direction:column;align-items:flex-start;gap:3px;min-width:96px}
+.synth .pick .cost{font-family:var(--mono);font-size:10px;color:var(--muted)}
+
+/* ---- bastion ---- */
+.fac{padding:15px;display:flex;flex-direction:column;gap:9px}
+.fac .fhead{display:flex;justify-content:space-between;align-items:baseline}
+.fac h3{font-size:15.5px}
+.fac .flevel{font-family:var(--mono);font-size:11px;color:var(--aether)}
+.fac .fdesc{font-size:12.5px;color:var(--muted)}
+.fac .feffect{font-family:var(--mono);font-size:11.5px;color:var(--online)}
+.fac .fcost{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.fac.unbuilt{opacity:.8;border-style:dashed}
+.fac .occ{display:flex;align-items:center;gap:7px;font-size:12px;padding:6px 9px;background:#0c1220;border-radius:7px}
+.fac .occ .mono{font-size:10px;color:var(--online)}
+.fac select{background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:6px;padding:6px;font-size:11.5px}
+
+/* ---- incursion ---- */
+@keyframes throb{0%,100%{box-shadow:0 0 0 0 rgba(240,113,74,.35)}50%{box-shadow:0 0 0 6px rgba(240,113,74,0)}}
+.inc-badge{font-family:var(--mono);font-size:10.5px;color:var(--danger);border:1px solid var(--danger);border-radius:999px;padding:2px 9px;animation:throb 2s infinite}
+.inc-panel{border-color:var(--danger)!important;padding:15px}
+.inc-panel h3{color:var(--danger)}
+.inc-count{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--danger)}
+.null-chip{font-family:var(--mono);font-size:11px;color:#8B7CF6;border:1px solid #3a3358;border-radius:7px;padding:4px 9px}
+
+/* ---- party picker & team battles ---- */
+.pick.in-party{border-color:var(--online);background:rgba(63,208,138,.08)}
+.pick .pnum{font-family:var(--mono);font-size:10px;color:var(--online)}
+.tier-chip{font-family:var(--mono);font-size:11px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:2px 9px}
+.fighter-mini{display:flex;flex-direction:column;gap:4px;align-items:center;min-width:88px}
+.fighter-mini .sig{width:52px;height:52px;border-radius:9px;background:#0c1220;border:1px solid var(--hair)}
+.fighter-mini .fname{font-size:11.5px;font-weight:600;text-align:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fighter-mini .hpbar{width:100%;margin-top:2px}
+.fighter-mini.dead{opacity:.35;filter:grayscale(1)}
+.team-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+@media(max-width:720px){.app{grid-template-columns:1fr}.rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap}.rail .foot{display:none}.main{padding:18px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="var(--aether)" stroke-width="1.5"/><path d="M16 4 L26 22 H6 Z" stroke="var(--aether)" stroke-width="1.5" fill="rgba(139,124,246,.12)"/><circle cx="16" cy="17" r="3" fill="var(--aether)"/></svg>
+      <b>AETHER</b>
+    </div>
+    <div class="navitem" data-view="scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="2"/><path d="M8 12a4 4 0 018 0M5 12a7 7 0 0114 0"/></svg>Rifts</div>
+    <div class="navitem" data-view="nest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>The Nest</div>
+    <div class="navitem" data-view="bastion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 21V9l4-3 4 3 4-3 4 3v12"/><path d="M4 21h16M10 21v-5h4v5"/></svg>Bastion</div>
+    <div class="navitem" data-view="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</div>
+    <div class="foot muted">
+      <div><span class="dot"></span>Anchor online</div>
+      <div class="mono" id="foot-net"></div>
+    </div>
+  </nav>
+  <div style="display:flex;flex-direction:column;min-width:0">
+    <div class="resbar" id="resbar"></div>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+<div id="modal-root"></div>
+<script>
+const $ = (s,el=document)=>el.querySelector(s);
+const api = async (path, opts={})=>{
+  const r = await fetch(path, {headers:{'Content-Type':'application/json'}, ...opts});
+  return r.json();
+};
+const EL_COLORS = {Ember:"#F0714A",Tide:"#3FA9D6",Volt:"#E8C84D",Loam:"#B08A54",Gale:"#8FD6B4",Frost:"#7FCBEB",Lumen:"#F4E9B8",Umbra:"#8B7CF6",Ferro:"#A6B0BE",Plasma:"#E86AD0"};
+const ESS_COLORS={ferro:"#A6B0BE",tide:"#3FA9D6",loam:"#B08A54",volt:"#E8C84D",umbra:"#8B7CF6",plasma:"#E86AD0"};
+const state = {view:'scan', devices:[], roster:[], net:{}, res:{}, rates:{}};
+
+/* ---------- number formatting + resource bar ---------- */
+function fmt(n){
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return n>=100?Math.round(n):(Math.round(n*10)/10);
+}
+function renderResBar(){
+  const r=state.res||{}, rates=state.rates||{};
+  const items=[];
+  const bits=r.bits||0;
+  items.push({key:'bits',name:'Bits',val:bits,rate:rates.bits,color:'#DCE3EE'});
+  if(r.cores>0||rates.cores)items.push({key:'cores',name:'Cores',val:r.cores||0,rate:rates.cores,color:'#E8C84D'});
+  if(r.aethercite>0)items.push({key:'aethercite',name:'Aethercite',val:r.aethercite,color:'#7FCBEB'});
+  for(const k of Object.keys(r).filter(k=>k.startsWith('essence.')&&r[k]>=0.1).sort()){
+    const kind=k.split('.')[1];
+    items.push({key:k,name:kind,val:r[k],rate:rates[k],color:ESS_COLORS[kind]||'#8B7CF6'});
+  }
+  const bar=$('#resbar');
+  bar.innerHTML=items.map(i=>`<span class="res"><span class="rdot" style="background:${i.color}"></span><span class="rname">${i.name}</span><span class="rval" data-res="${i.key}">${fmt(i.val)}</span>${i.rate?`<span class="rrate">+${fmt(i.rate)}/h</span>`:''}</span>`).join('')
+    || `<span class="res"><span class="rname" style="color:var(--dim)">clear rift nodes to start earning</span></span>`;
+}
+async function pollState(){
+  try{
+    const st=await api('/api/state');
+    const oldBits=state.res.bits||0;
+    state.res=st.resources||{};state.rates=st.rates||{};state.net=st;
+    renderResBar();
+    if((state.res.bits||0)>oldBits+0.05){
+      const el=document.querySelector('[data-res="bits"]');
+      if(el){el.classList.add('bump');setTimeout(()=>el.classList.remove('bump'),600);}
+    }
+  }catch(e){}
+}
+setInterval(pollState, 10000);
+
+/* ---------- procedural SVG sigils (visual identity from the seed) ---------- */
+function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h;}
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+// device rift sigil: symmetric radial glyph seeded by MAC
+function riftSigil(mac,color){
+  const rnd=mulberry(hashStr(mac));
+  const arms=3+Math.floor(rnd()*6), rings=1+Math.floor(rnd()*3), cx=28,cy=28;
+  let p=`<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">`;
+  p+=`<defs><radialGradient id="g${hashStr(mac)}"><stop offset="0%" stop-color="${color}" stop-opacity=".9"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>`;
+  p+=`<circle cx="28" cy="28" r="24" fill="url(#g${hashStr(mac)})" opacity=".25"/>`;
+  for(let r=0;r<rings;r++){const rad=8+r*7+rnd()*3;p+=`<circle cx="28" cy="28" r="${rad}" fill="none" stroke="${color}" stroke-width="1" opacity="${.5-r*.1}"/>`;}
+  for(let a=0;a<arms;a++){const ang=(a/arms)*Math.PI*2+rnd()*.3;const len=14+rnd()*8;const x=cx+Math.cos(ang)*len,y=cy+Math.sin(ang)*len;p+=`<line x1="28" y1="28" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${color}" stroke-width="1.4" opacity=".8"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(1.5+rnd()*2).toFixed(1)}" fill="${color}"/>`;}
+  p+=`<circle cx="28" cy="28" r="3.4" fill="${color}"/></svg>`;
+  return p;
+}
+// daemon sigil from its backend sigil spec + seed
+function daemonSigil(d){
+  const s=d.sigil||{}, color=d.color||"#8B7CF6";
+  const rnd=mulberry(hashStr(d.seed||d.name));
+  const arms=s.arms||5, cx=30,cy=30;
+  let p=`<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">`;
+  p+=`<defs><radialGradient id="d${d.seed}"><stop offset="0%" stop-color="${color}" stop-opacity=".85"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>`;
+  p+=`<circle cx="30" cy="30" r="26" fill="url(#d${d.seed})" opacity=".3"/>`;
+  // body blob (symmetric)
+  let pts=[];const lobes=arms;
+  for(let i=0;i<=lobes;i++){const ang=(i/lobes)*Math.PI*2;const rad=13+Math.sin(ang*2+(s.jitter||0)*6)*4+rnd()*3;pts.push([cx+Math.cos(ang)*rad,cy+Math.sin(ang)*rad]);}
+  p+=`<polygon points="${pts.map(pt=>pt[0].toFixed(1)+','+pt[1].toFixed(1)).join(' ')}" fill="${color}" opacity=".18" stroke="${color}" stroke-width="1.3"/>`;
+  // eyes
+  const eyes=s.eyes||2;for(let e=0;e<eyes;e++){const ex=cx+(e-(eyes-1)/2)*7;p+=`<circle cx="${ex}" cy="28" r="2.4" fill="${color}"/>`;}
+  p+=`<text x="30" y="46" font-size="9" text-anchor="middle" fill="${color}" opacity=".8" font-family="monospace">${s.glyph||'◇'}</text>`;
+  p+=`</svg>`;return p;
+}
+
+/* ---------- meters ---------- */
+const METER_COLOR={hunger:"#8FD6B4",energy:"#7FCBEB",happiness:"#E8C84D",discipline:"#8B7CF6",corruption:"#E86AD0",weight:"#A6B0BE"};
+function meter(label,val,key){
+  const v=Math.round(val),col=METER_COLOR[key]||"#8B7CF6";
+  return `<div class="meter"><span class="muted">${label}</span><div class="track"><i style="width:${v}%;background:${col}"></i></div><span class="mono">${v}</span></div>`;
+}
+
+/* ---------- views ---------- */
+async function boot(){
+  const st=await api('/api/state');
+  state.net=st;state.res=st.resources||{};state.rates=st.rates||{};
+  renderResBar();
+  $('#foot-net').textContent=(st.local_ip||'')+(st.subnet? '\n'+st.subnet:'');
+  const foot=document.querySelector('.rail .foot');
+  if(foot&&st.version)foot.insertAdjacentHTML('beforeend',`<div class="mono" style="color:var(--dim)">v${st.version}</div>`);
+  document.querySelectorAll('.navitem').forEach(n=>n.onclick=()=>go(n.dataset.view));
+  if(!st.bootstrapped){return bootstrapView();}
+  await refreshRoster();
+  go('scan');
+}
+function setActive(v){document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===v));}
+function go(v){state.view=v;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView}[v]||scanView)();}
+
+/* -- first run: hatch the Anchor egg -- */
+function bootstrapView(){
+  $('#main').innerHTML=`
+    <div class="topbar"><div><div class="eyebrow">First contact</div><h1>Hatch your Anchor daemon</h1></div></div>
+    <div class="card" style="padding:34px;text-align:center;max-width:460px;margin:30px auto">
+      <div style="width:110px;height:110px;margin:0 auto 18px">${riftSigil(state.net.local_ip||'anchor','#8B7CF6')}</div>
+      <p class="muted" style="margin:0 0 22px">Every AETHER install anchors to the device it runs on. An egg is stirring in the subspace between your services. Hatch it to begin — then scan your network to find rifts.</p>
+      <button class="btn primary" id="hatch">Hatch the egg</button>
+    </div>`;
+  $('#hatch').onclick=async()=>{
+    $('#hatch').disabled=true;$('#hatch').textContent='Hatching…';
+    const r=await api('/api/bootstrap',{method:'POST'});
+    toast(`${r.daemon.name} hatched!`);
+    await refreshRoster();go('nest');
+  };
+}
+
+/* -- rifts / scan -- */
+async function scanView(){
+  $('#main').innerHTML=`
+    <div class="topbar">
+      <div><div class="eyebrow">Local subspace</div><h1>Rifts on your network</h1></div>
+      <div style="display:flex;gap:9px">
+        <button class="btn" id="manual">Add device</button>
+        <button class="btn primary" id="scan">Scan network</button>
+      </div>
+    </div>
+    <div id="scanmeta" class="muted mono" style="font-size:12px;margin-bottom:14px"></div>
+    <div id="rifts"></div>`;
+  $('#scan').onclick=()=>runScan();
+  $('#manual').onclick=manualDialog;
+  const known=await api('/api/devices');
+  if(known.devices && known.devices.length){
+    state.devices=known.devices;
+    $('#scanmeta').textContent=`${known.devices.length} known device(s) · presence updates live`;
+    await hydrateRifts();renderRifts();
+  } else {
+    runScan(true);
+  }
+}
+async function hydrateRifts(){
+  for(const d of state.devices){
+    d.rift=await api(`/api/rift/${d.mac}?hostname=${encodeURIComponent(d.hostname||'')}`);
+  }
+}
+async function runScan(quiet){
+  $('#rifts').innerHTML=`<div class="spin"></div>`;
+  $('#scanmeta').textContent='Sweeping subnet & reading ARP table…';
+  let res=await api('/api/scan');
+  if(!res.devices || !res.devices.length){
+    res=await api('/api/scan?mock=1');
+    $('#scanmeta').textContent='No live devices reachable here — seeded a sample network. On your real LAN this fills with your actual devices.';
+  }else{
+    $('#scanmeta').textContent=`${res.devices.length} device(s) known · ${res.meta.subnet||''} ${res.meta.swept?'· swept':''}`;
+  }
+  state.devices=res.devices;
+  await hydrateRifts();
+  renderRifts();
+}
+function renderRifts(){
+  const host=$('#rifts');host.className='grid rift-grid';
+  host.innerHTML=state.devices.map((d,i)=>{
+    const r=d.rift; if(!r||r.error) return '';
+    const col=r.biome.color, prog=r.progress||{cleared:0};
+    const pct=Math.round(100*prog.cleared/r.nodes.length);
+    const dorm=r.dormant;
+    return `<div class="rift card ${dorm?'dormant':''}" data-i="${i}">
+      <div class="sigwrap">
+        <div class="sig">${riftSigil(r.mac,col)}</div>
+        <div style="min-width:0">
+          <h3>${r.world_name}</h3>
+          <div class="host">${r.hostname}</div>
+          <div class="meta">
+            <span class="chip ${dorm?'dormant-chip':'online-chip'}"><span class="pulse-dot ${dorm?'off':'on'}"></span>${dorm?'dormant':'awake'}</span>
+            ${prog.tier?`<span class="tier-chip">T${prog.tier}</span>`:''}
+            ${d.rift.incursion?`<span class="inc-badge">⚠ NULL ${Math.ceil(d.rift.incursion.seconds_left/3600)}h</span>`:''}
+            <span class="chip">${r.biome.name}</span>${r.vendor?`<span class="chip">${r.vendor}</span>`:''}
+          </div>
+        </div>
+      </div>
+      <div class="mono muted" style="font-size:11px">${r.mac} · depth ${r.depth}${r.expedition?' · <span style="color:var(--aether)">expedition active</span>':''}</div>
+      <div class="progress-mini"><i style="width:${pct}%"></i></div>
+      <div class="muted" style="font-size:12px">${prog.cleared}/${r.nodes.length} nodes cleared${prog.boss_down?' · <span style="color:var(--warn)">stabilized</span>':''}</div>
+      <div class="biomebar" style="background:${dorm?'#3a3358':col}"></div>
+    </div>`;
+  }).join('');
+  host.querySelectorAll('.rift').forEach(el=>el.onclick=()=>riftView(state.devices[+el.dataset.i]));
+}
+
+function manualDialog(){
+  modal(`<div class="card" style="padding:24px;width:min(420px,94vw)">
+    <h2 style="font-size:19px;margin-bottom:6px">Add a device by MAC</h2>
+    <p class="muted" style="font-size:13px;margin-top:0">Any MAC address seeds a full rift — even one that isn't on this network.</p>
+    <input id="m-mac" placeholder="AA:BB:CC:DD:EE:FF" class="mono" style="width:100%;padding:10px;background:#0c1220;border:1px solid var(--hair);border-radius:8px;color:var(--text);margin-bottom:9px">
+    <input id="m-host" placeholder="nickname (optional)" style="width:100%;padding:10px;background:#0c1220;border:1px solid var(--hair);border-radius:8px;color:var(--text);margin-bottom:14px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="m-go">Open rift</button>
+    </div></div>`);
+  $('#m-go').onclick=async()=>{
+    const mac=$('#m-mac').value.trim();
+    const res=await api('/api/device/manual',{method:'POST',body:JSON.stringify({mac,hostname:$('#m-host').value.trim()})});
+    if(res.error){toast('Invalid MAC address');return;}
+    closeModal();
+    const dev={mac:res.rift.mac,hostname:res.rift.hostname,vendor:res.rift.vendor,rift:{...res.rift,progress:res.rift.progress||{cleared:0,boss_down:0}}};
+    dev.rift.progress = (await api(`/api/rift/${res.rift.mac}`)).progress;
+    state.devices.unshift(dev);renderRifts();riftView(dev);
+  };
+}
+
+/* -- a single rift -- */
+async function riftView(dev){
+  const r=(await api(`/api/rift/${dev.mac}?hostname=${encodeURIComponent(dev.hostname||'')}`));
+  dev.rift=r;
+  const col=r.biome.color;
+  setActive('scan');
+  $('#main').innerHTML=`
+    <div class="topbar">
+      <div><div class="eyebrow" style="color:${col}">${r.biome.name} · ${r.biome.mood}</div>
+      <h1>${r.world_name} ${r.progress.tier?`<span class="tier-chip">TIER ${r.progress.tier}</span>`:''} ${r.progress.ward?`<span class="tier-chip" style="color:#7FCBEB;border-color:#2a4a5e">WARD ${r.progress.ward}</span>`:''}</h1>
+      <div class="mono muted" style="font-size:12px;margin-top:4px">
+        <span class="pulse-dot ${r.dormant?'off':'on'}"></span>${r.dormant?'DORMANT — device off-network. Enemies +3 Lv, drifting Umbra, XP ×1.35':'awake'} · ${r.hostname} · ${r.mac}${r.vendor?' · '+r.vendor:''}
+      </div></div>
+      <button class="btn ghost" onclick="go('scan')">← All rifts</button>
+    </div>
+    <div id="inc-host"></div>
+
+    <div class="section-title">Habitats</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
+      ${r.habitats.map(h=>`<div class="card" style="padding:13px"><div style="font-weight:600">${h.name}</div><div class="chip" style="margin-top:6px;color:${EL_COLORS[h.element]}">${h.element}</div><div class="muted mono" style="font-size:11px;margin-top:6px">density ${h.density}</div></div>`).join('')}
+    </div>
+
+    <div class="section-title">Node crawl — fight now, or dispatch an expedition</div>
+    <div id="picker"></div>
+    <div id="exped-bar" style="margin:0 0 12px"></div>
+    <div class="node-chain">
+      ${r.nodes.map(n=>{
+        const cleared=n.index<r.progress.cleared, locked=n.index>r.progress.cleared;
+        const e=n.enemy;
+        const hv=r.harvests&&r.harvests[String(n.index)];
+        let hvHtml='';
+        if(cleared){
+          if(hv){
+            const rateTxt=Object.entries(hv.rates).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')}​/h`).join(' · ');
+            hvHtml=`<div class="hv"><div class="hv-who"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${hv.color}"></span>${hv.name}</div><div class="hv-rate">${rateTxt}</div><div class="hv-life">${fmt(hv.lifetime_bits)} Bits gathered</div><button class="btn ghost" data-stopharvest="${hv.daemon_id}">Stop</button></div>`;
+          } else {
+            const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting);
+            hvHtml=`<div class="hv"><div class="muted">harvest slot open</div>${free.length?`<select data-assign="${n.index}"><option value="">assign daemon…</option>${free.map(d=>`<option value="${d.id}">${d.name} · pw${d.power}</option>`).join('')}</select>`:'<div class="muted" style="font-size:10px;margin-top:4px">no free daemons</div>'}</div>`;
+          }
+        }
+        return `<div class="node ${cleared?'cleared':''} ${n.is_boss?'boss':''} ${locked?'locked':''}" data-node="${n.index}">
+          <div class="n-lvl">${n.is_boss?'★ BOSS':'NODE '+(n.index+1)} · Lv${n.enemy_level}${r.dormant?'<span style="color:var(--aether)">+3</span>':''}</div>
+          <div class="n-name">${e.name}</div>
+          <div class="chip attr-${e.attribute}" style="font-size:10px">${e.attribute} · ${r.dormant?'Umbra':e.element}</div>
+          <div class="mono muted" style="font-size:10px;margin-top:6px">pw ${e.power}</div>
+          ${cleared&&!hvHtml?'<div style="color:var(--online);font-size:11px;margin-top:6px">cleared ✓</div>':''}
+          ${locked?'<div class="muted" style="font-size:11px;margin-top:6px">locked</div>':''}
+          ${hvHtml}
+        </div>`;}).join('')}
+    </div>
+
+    <div class="section-title">Signature daemon</div>
+    <div class="card" style="padding:16px;display:flex;gap:15px;align-items:center;max-width:520px">
+      <div style="width:64px;height:64px;flex:none">${daemonSigil(r.signature_daemon)}</div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:16px">${r.signature_daemon.name}</div>
+        <div class="chip attr-${r.signature_daemon.attribute}" style="margin-top:5px">${r.signature_daemon.attribute} · ${r.signature_daemon.element}</div>
+        <span class="stars" style="margin-left:6px">${'★'.repeat(r.signature_daemon.rarity)}</span>
+      </div>
+      <button class="btn ${r.progress.boss_down?'primary':''}" id="capture" ${r.progress.boss_down?'':'disabled'}>${r.progress.boss_down?'Capture':'Beat boss first'}</button>
+    </div>`;
+
+  renderPicker(dev);
+  renderExpedBar(dev);
+  renderIncursion(dev);
+  renderOverclock(dev);
+  $('#capture').onclick=async()=>{
+    const res=await api('/api/capture',{method:'POST',body:JSON.stringify({mac:dev.mac})});
+    if(res.error){toast(res.message||res.error);return;}
+    toast(`Captured ${res.daemon.name}!`);await refreshRoster();
+  };
+  $('#main').querySelectorAll('.node').forEach(el=>{
+    el.onclick=(ev)=>{
+      if(ev.target.closest('select,button,.hv'))return;   // harvest controls aren't battle clicks
+      const idx=+el.dataset.node;
+      if(idx<dev.rift.progress.cleared)return;            // cleared nodes are harvest slots now
+      if(idx>dev.rift.progress.cleared){toast('Clear the previous node first');return;}
+      if(!state.party||!state.party.length){toast('Pick a party to send (above)');return;}
+      startBattle(dev,idx);
+    };
+  });
+  $('#main').querySelectorAll('[data-assign]').forEach(sel=>{
+    sel.onchange=async()=>{
+      if(!sel.value)return;
+      const res=await api('/api/harvest',{method:'POST',body:JSON.stringify({daemon_id:+sel.value,mac:dev.mac,node_index:+sel.dataset.assign})});
+      if(res.error){toast(res.message||res.error);return;}
+      toast('Harvester assigned');await refreshRoster();pollState();riftView(dev);
+    };
+  });
+  $('#main').querySelectorAll('[data-stopharvest]').forEach(b=>{
+    b.onclick=async()=>{
+      const res=await api('/api/harvest/stop',{method:'POST',body:JSON.stringify({daemon_id:+b.dataset.stopharvest})});
+      if(res.error){toast(res.error);return;}
+      toast('Harvester recalled');await refreshRoster();pollState();riftView(dev);
+    };
+  });
+}
+function renderPicker(dev){
+  const avail=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);
+  if(!state.roster.length){$('#picker').innerHTML=`<div class="muted" style="font-size:13px;margin-bottom:8px">No daemons yet — hatch or capture one in The Nest.</div>`;return;}
+  if(!avail.length){$('#picker').innerHTML=`<div class="muted" style="font-size:13px;margin-bottom:8px">Every daemon is busy — expeditions, harvest nodes, or training halls.</div>`;state.party=[];return;}
+  state.party=(state.party||[]).filter(id=>avail.find(d=>d.id===id));
+  if(!state.party.length)state.party=[avail[0].id];
+  $('#picker').innerHTML=`<div class="muted" style="font-size:12px;margin-bottom:6px">Party (tap to toggle, up to 3):</div><div class="picker">${
+    avail.map(d=>{const idx=state.party.indexOf(d.id);
+      return `<div class="pick ${idx>=0?'in-party':''}" data-id="${d.id}">${idx>=0?`<span class="pnum">${idx+1}</span>`:''}<span class="dot" style="background:${d.color}"></span>${d.name} <span class="muted mono" style="font-size:11px">Lv${d.level} pw${d.power}</span></div>`;}).join('')
+  }</div>`;
+  $('#picker').querySelectorAll('.pick').forEach(el=>el.onclick=()=>{
+    const id=+el.dataset.id, i=state.party.indexOf(id);
+    if(i>=0)state.party.splice(i,1);
+    else{if(state.party.length>=3){toast('Party is full (3 max)');return;}state.party.push(id);}
+    renderPicker(dev);renderExpedBar(dev);
+  });
+}
+function renderOverclock(dev){
+  const r=dev.rift;
+  if(!r.fully_cleared)return;
+  const host=$('#exped-bar');
+  host.insertAdjacentHTML('afterend',`<div class="card" style="border-color:var(--warn);padding:13px 16px;margin-bottom:12px;display:flex;align-items:center;gap:14px;max-width:640px">
+    <div style="flex:1"><b style="color:var(--warn)">Fully stabilized.</b> <span class="muted" style="font-size:13px">Overclock to Tier ${r.progress.tier+1}: the rift resets — enemies ×1.6 stronger, all yields ×2. Harvesters will withdraw.</span></div>
+    <button class="btn" style="border-color:var(--warn);color:var(--warn)" id="overclock">Overclock</button></div>`);
+  $('#overclock').onclick=async()=>{
+    const res=await api('/api/overclock',{method:'POST',body:JSON.stringify({mac:dev.mac})});
+    if(res.error||!res.ok){toast(res.reason||res.error||'Cannot overclock');return;}
+    toast(`OVERCLOCKED — Tier ${res.tier}`);await refreshRoster();riftView(dev);
+  };
+}
+function renderIncursion(dev){
+  const r=dev.rift, host=$('#inc-host');
+  if(!r.incursion){host.innerHTML='';return;}
+  const inc=r.incursion;
+  const avail=state.roster.filter(d=>!d.on_expedition&&!d.training);
+  const eta=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h?`${h}h ${m}m`:`${m}m ${s%60}s`;};
+  host.innerHTML=`<div class="card inc-panel" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div><h3 style="font-size:17px">⚠ NULL INCURSION</h3>
+      <div class="muted" style="font-size:12.5px">Static gathers. Garrison defenders or repel now — undefended worlds fall.</div></div>
+      <div style="margin-left:auto;text-align:right"><div class="inc-count" id="inc-count">${eta(inc.seconds_left)}</div><div class="mono muted" style="font-size:10px">until the Null strikes</div></div>
+    </div>
+    <div style="display:flex;gap:7px;margin:10px 0;flex-wrap:wrap">${inc.nulls.map(n=>`<span class="null-chip">${n.name} · Lv${n.level} · pw${n.power}</span>`).join('')}</div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">Garrison (fights automatically at the deadline — harvesters can serve):</div>
+    <div class="picker" id="gar-picker">${avail.map(d=>{const on=inc.garrison.includes(d.id);
+      return `<div class="pick ${on?'in-party':''}" data-gar="${d.id}"><span class="dot" style="background:${d.color}"></span>${d.name} <span class="muted mono" style="font-size:11px">pw${d.power}</span></div>`;}).join('')||'<span class="muted">no daemons available</span>'}</div>
+    <div style="display:flex;gap:9px;margin-top:4px">
+      <button class="btn" id="save-gar">Save garrison</button>
+      <button class="btn" style="border-color:var(--danger);color:var(--danger)" id="repel">Repel now with garrison</button>
+    </div></div>`;
+  const cd=setInterval(()=>{inc.seconds_left=Math.max(0,inc.seconds_left-1);const el=$('#inc-count');if(!el){clearInterval(cd);return;}el.textContent=eta(inc.seconds_left);},1000);
+  host.querySelectorAll('[data-gar]').forEach(el=>el.onclick=()=>{
+    const id=+el.dataset.gar, i=inc.garrison.indexOf(id);
+    if(i>=0)inc.garrison.splice(i,1);
+    else{if(inc.garrison.length>=3){toast('Garrison is full (3 max)');return;}inc.garrison.push(id);}
+    el.classList.toggle('in-party');
+  });
+  $('#save-gar').onclick=async()=>{
+    const res=await api('/api/incursion/garrison',{method:'POST',body:JSON.stringify({mac:dev.mac,daemon_ids:inc.garrison})});
+    if(res.error){toast(res.error);return;}
+    toast('Garrison posted');
+  };
+  $('#repel').onclick=async()=>{
+    if(!inc.garrison.length){toast('Pick defenders first');return;}
+    const res=await api('/api/incursion/repel',{method:'POST',body:JSON.stringify({mac:dev.mac,daemon_ids:inc.garrison})});
+    if(res.error){toast(res.message||res.error);return;}
+    showTeamBattle(res.battle,
+      inc.garrison.map(id=>state.roster.find(d=>d.id===id)).filter(Boolean),
+      res.nulls, res.won,
+      res.won?`Ward ${res.reward.ward} raised · +${res.reward.cores} Cores · +${res.reward.aethercite} Aethercite`:`${dev.rift.world_name} has fallen — reconquer it.`);
+    await refreshRoster();pollState();
+    dev.rift=await api(`/api/rift/${dev.mac}`);
+    setTimeout(()=>{if(!document.querySelector('.overlay'))riftView(dev);},400);
+  };
+}
+function renderExpedBar(dev){
+  const r=dev.rift, host=$('#exped-bar'); if(!host) return;
+  if(r.expedition){
+    const who=state.roster.find(d=>d.id===r.expedition.daemon_id);
+    host.innerHTML=`<div class="card" style="padding:11px 15px;display:flex;align-items:center;gap:12px;max-width:520px">
+      <span class="away">EXPEDITION ACTIVE</span>
+      <span style="font-size:13px">${who?who.name:'A daemon'} is working this rift · ${r.expedition.fights} battle(s) so far</span>
+      <button class="btn ghost" id="recall" style="margin-left:auto">Recall</button></div>`;
+    $('#recall').onclick=async()=>{
+      await api('/api/expedition/recall',{method:'POST',body:JSON.stringify({daemon_id:r.expedition.daemon_id})});
+      toast('Recalled to the Nest');await refreshRoster();riftView(dev);
+    };
+  } else if(r.progress.cleared < r.nodes.length && state.party && state.party.length){
+    host.innerHTML=`<button class="btn" id="dispatch">Dispatch ${state.roster.find(d=>d.id===state.party[0])?.name||'lead daemon'} on expedition — fights nodes solo, reports to the Pulse</button>`;
+    $('#dispatch').onclick=async()=>{
+      const res=await api('/api/expedition',{method:'POST',body:JSON.stringify({daemon_id:state.party[0],mac:dev.mac})});
+      if(res.error){toast(res.message||res.error);return;}
+      toast('Expedition dispatched');await refreshRoster();riftView(dev);
+    };
+  } else host.innerHTML='';
+}
+
+/* -- the bastion: base building -- */
+async function bastionView(){
+  await refreshRoster();
+  const b=await api('/api/bastion');
+  const KIND_LABEL={hall:'Training halls',support:'Support',automation:'Automations',war:'War'};
+  const order=['hall','support','automation','war'];
+  let html=`<div class="topbar"><div><div class="eyebrow">Your anchor, fortified</div><h1>The Bastion</h1></div></div>`;
+  for(const kind of order){
+    const entries=Object.entries(b.facilities).filter(([k,f])=>f.kind===kind);
+    if(!entries.length)continue;
+    html+=`<div class="section-title">${KIND_LABEL[kind]}</div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">`;
+    for(const [key,f] of entries){
+      const cost=Object.entries(f.next_cost).map(([k,v])=>`${fmt(v)} ${k.replace('essence.','')}`).join(' + ');
+      const affordable=Object.entries(f.next_cost).every(([k,v])=>(state.res[k]||0)>=v);
+      let occHtml='';
+      if(f.kind==='hall'&&f.level>0){
+        occHtml=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat.toUpperCase()} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
+        const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);
+        if(f.occupants.length<f.slots&&free.length){
+          occHtml+=`<select data-enroll="${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name} · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}</option>`).join('')}</select>`;
+        } else if(f.occupants.length>=f.slots){
+          occHtml+=`<div class="muted mono" style="font-size:10.5px">${f.occupants.length}/${f.slots} slots — full</div>`;
+        }
+      }
+      html+=`<div class="card fac ${f.level===0?'unbuilt':''}">
+        <div class="fhead"><h3>${f.name}</h3><span class="flevel">${f.level===0?'UNBUILT':'LV '+f.level}</span></div>
+        <div class="fdesc">${f.desc}</div>
+        <div class="feffect">${f.effect}</div>
+        ${occHtml}
+        <div style="display:flex;align-items:center;gap:10px;margin-top:auto">
+          <button class="btn ${f.level===0?'primary':''}" data-upgrade="${key}" ${affordable?'':'disabled'}>${f.level===0?'Build':'Upgrade'}</button>
+          <span class="fcost">${cost}</span>
+        </div></div>`;
+    }
+    html+=`</div>`;
+  }
+  $('#main').innerHTML=html;
+  $('#main').querySelectorAll('[data-upgrade]').forEach(btn=>btn.onclick=async()=>{
+    const res=await api('/api/bastion/upgrade',{method:'POST',body:JSON.stringify({key:btn.dataset.upgrade})});
+    if(!res.ok){toast(res.reason==='cant_afford'?'Not enough resources':'Cannot upgrade');return;}
+    toast(`${btn.dataset.upgrade.replace('_',' ')} → level ${res.level}`);pollState();bastionView();
+  });
+  $('#main').querySelectorAll('[data-enroll]').forEach(sel=>sel.onchange=async()=>{
+    if(!sel.value)return;
+    const res=await api('/api/bastion/train',{method:'POST',body:JSON.stringify({daemon_id:+sel.value,hall:sel.dataset.enroll})});
+    if(res.error||!res.ok){toast(res.message||res.reason||'Cannot enroll');return;}
+    toast('Training begun');bastionView();
+  });
+  $('#main').querySelectorAll('[data-withdraw]').forEach(btn=>btn.onclick=async()=>{
+    const res=await api('/api/bastion/withdraw',{method:'POST',body:JSON.stringify({daemon_id:+btn.dataset.withdraw})});
+    if(res.error){toast(res.error);return;}
+    toast('Withdrawn from training');bastionView();
+  });
+}
+
+/* -- the pulse: journal of the living world -- */
+async function pulseView(){
+  $('#main').innerHTML=`
+    <div class="topbar"><div><div class="eyebrow">The living world</div><h1>Pulse</h1></div>
+    <button class="btn ghost" id="refresh">Refresh</button></div>
+    <div class="journal" id="journal"><div class="spin"></div></div>`;
+  $('#refresh').onclick=loadJournal;
+  loadJournal();
+}
+async function loadJournal(){
+  const r=await api('/api/journal?limit=80');
+  const j=$('#journal'); if(!j) return;
+  if(!r.events.length){j.innerHTML=`<div class="empty">Silence in the subspace. Scan for rifts, dispatch expeditions, and this feed comes alive — it keeps recording even while you're away.</div>`;return;}
+  j.innerHTML=r.events.map(e=>`<div class="jrow k-${e.kind}">
+    <span class="jtime">${relTime(e.ts)}</span><span class="jtext">${e.text}</span>
+  </div>`).join('');
+}
+function relTime(ts){
+  const s=Math.max(1,(Date.now()/1000)-ts);
+  if(s<60)return Math.floor(s)+'s ago';
+  if(s<3600)return Math.floor(s/60)+'m ago';
+  if(s<86400)return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+/* -- team battle theatre -- */
+async function startBattle(dev,nodeIndex){
+  const res=await api('/api/battle',{method:'POST',body:JSON.stringify({daemon_ids:state.party,mac:dev.mac,node_index:nodeIndex})});
+  if(res.error){toast(res.message||res.error);return;}
+  const rw=res.reward;
+  const lootTxt=rw.loot&&Object.keys(rw.loot).length?'<br>'+Object.entries(rw.loot).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')} `).join(' · '):'';
+  const sub=res.won?`+${rw.xp} XP each${rw.tier?` <span class="tier-chip">T${rw.tier}</span>`:''}${rw.dormant_bonus?' <span style="color:var(--aether)">(dormant ×1.35)</span>':''}${rw.levels?` · +${rw.levels} level(s)!`:''}${rw.boss_down?' · rift stabilized ★':''}${lootTxt}`:'The party retreats, shaken.';
+  await showTeamBattle(res.battle,res.party,res.foes,res.won,sub);
+  await refreshRoster();pollState();
+  dev.rift=await api(`/api/rift/${dev.mac}`);
+}
+async function showTeamBattle(b,teamA,teamB,won,subtitle){
+  const mini=(d,key)=>`<div class="fighter-mini" data-f="${key}"><div class="sig">${daemonSigil(d)}</div><div class="fname">${d.name}</div><div class="mono muted" style="font-size:9.5px">Lv${d.level}</div><div class="hpbar ${key[0]==='b'?'foe':''}"><i style="width:100%"></i></div></div>`;
+  modal(`<div class="theatre card">
+    <div style="padding:16px">
+      <div class="team-row">${teamA.map((d,i)=>mini(d,'a'+i)).join('')}</div>
+      <div style="text-align:center;font-family:var(--display);color:var(--muted);letter-spacing:.2em;padding:8px 0;font-size:13px">VS</div>
+      <div class="team-row">${teamB.map((d,i)=>mini(d,'b'+i)).join('')}</div>
+    </div>
+    <div class="log" id="log"></div>
+    <div id="battle-result"></div>
+  </div>`);
+  const maxHp=b.max_hp, log=$('#log');
+  for(const step of b.log){
+    await sleep(300);
+    for(const [k,v] of Object.entries(step.hp)){
+      const f=document.querySelector(`[data-f="${k}"]`);
+      if(f){f.querySelector('.hpbar i').style.width=(100*v/maxHp[k])+'%';f.classList.toggle('dead',v<=0);}
+    }
+    const cls=step.actor[0]==='a'?'a':'b';
+    const note=step.note?` <span class="muted">[${step.note} ×${step.mult}]</span>`:'';
+    log.innerHTML+=`<div class="row"><span class="${cls}">${step.actor_name}</span> → ${step.target_name} for <b class="${step.crit?'crit':''}">${step.dmg}${step.crit?' CRIT':''}</b>${note}</div>`;
+    log.scrollTop=log.scrollHeight;
+  }
+  await sleep(300);
+  $('#battle-result').innerHTML=`<div class="result ${won?'win':'lose'}"><h2>${won?'Victory':'Defeat'}</h2><div class="muted" style="margin:6px 0 14px">${subtitle||''}</div><button class="btn primary" onclick="closeModal()">Continue</button></div>`;
+}
+
+/* -- the nest (care + train + evolve) -- */
+async function nestView(){
+  await refreshRoster();
+  $('#main').innerHTML=`
+    <div class="topbar"><div><div class="eyebrow">Home space</div><h1>The Nest</h1></div>
+    <div class="net">${state.roster.length} daemon(s) in your care</div></div>
+    <div class="section-title">Hatchery</div>
+    <div class="card hatchery" id="hatchery"><div class="spin"></div></div>
+    <div class="section-title">Your daemons</div>
+    <div id="roster" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))"></div>`;
+  renderHatchery();
+  const host=$('#roster');
+  if(!state.roster.length){host.innerHTML=`<div class="empty">No daemons yet. Scan a rift, defeat its Gatekeeper, and capture its signature daemon — or your Anchor egg is waiting on first run.</div>`;return;}
+  host.innerHTML=state.roster.map(daemonCard).join('');
+  bindDaemonActions();
+}
+async function renderHatchery(){
+  const h=await api('/api/hatchery');
+  const host=$('#hatchery'); if(!host)return;
+  const eggSvg=(kind,pct)=>{const c=ESS_COLORS[kind]||'#8B7CF6';return `<svg class="egg-svg" viewBox="0 0 44 44"><ellipse cx="22" cy="24" rx="13" ry="16" fill="${c}" opacity=".18" stroke="${c}" stroke-width="1.4"/><ellipse cx="22" cy="24" rx="13" ry="16" fill="none" stroke="${c}" stroke-width="2.5" stroke-dasharray="${Math.round(pct*91)} 91" transform="rotate(-90 22 24)" stroke-linecap="round"/><circle cx="22" cy="24" r="3" fill="${c}" opacity="${.4+.6*pct}"/></svg>`;};
+  const eggs=h.eggs.map(e=>{
+    const pct=1-(e.seconds_left/e.total_seconds);
+    const eta=e.seconds_left>3600?Math.ceil(e.seconds_left/3600)+'h':e.seconds_left>60?Math.ceil(e.seconds_left/60)+'m':e.seconds_left+'s';
+    return `<div class="egg-row">${eggSvg(e.essence,pct)}<div style="flex:1"><div style="font-weight:600">${e.essence} egg <span class="muted mono" style="font-size:11px">→ ${h.element_for[e.essence]}-leaning</span></div><div class="eggbar"><i style="width:${Math.round(pct*100)}%"></i></div><div class="mono muted" style="font-size:10.5px;margin-top:3px">hatches in ~${eta}</div></div></div>`;
+  }).join('');
+  const picks=h.essence_kinds.map(k=>{
+    const cost=h.next_cost[k];
+    const affordable=(state.res.bits||0)>=cost.bits && (state.res['essence.'+k]||0)>=cost['essence.'+k];
+    return `<div class="pick synth-pick" data-synth="${k}" style="${affordable?'':'opacity:.45'}"><span><span style="background:${ESS_COLORS[k]};display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px"></span><b>${k}</b></span><span class="cost">${fmt(cost.bits)} Bits + ${fmt(cost['essence.'+k])} essence</span></div>`;
+  }).join('');
+  host.innerHTML=`
+    <div class="muted" style="font-size:13px">Synthesize eggs from harvested essence — the essence chooses the element, patience does the rest. Each daemon you command makes the next egg costlier.</div>
+    ${eggs||'<div class="muted" style="padding:14px 0 4px;font-size:12.5px;border-top:1px solid var(--hair);margin-top:12px">No eggs incubating.</div>'}
+    <div class="synth">${picks}</div>`;
+  host.querySelectorAll('[data-synth]').forEach(el=>el.onclick=async()=>{
+    const res=await api('/api/hatchery/synthesize',{method:'POST',body:JSON.stringify({essence:el.dataset.synth})});
+    if(!res.ok){toast(res.reason==='cant_afford'?'Not enough resources yet':'Cannot synthesize');return;}
+    toast('Egg synthesized — incubation begun');pollState();renderHatchery();
+  });
+}
+
+function daemonCard(d){
+  const away=d.on_expedition, mining=!!d.harvesting, inHall=!!d.training;
+  const evo = d.can_evolve&&!away?`<button class="btn primary" data-act="evolve" data-id="${d.id}">Evolve → next stage</button>`:'';
+  return `<div class="card daemon ${away?'is-away':''}" data-card="${d.id}">
+    <div class="head">
+      <div class="sig">${daemonSigil(d)}</div>
+      <div class="title">
+        <h3>${d.name} ${away?`<span class="away">AWAY · ${d.expedition.world}</span>`:''}${mining?`<span class="away" style="color:var(--online);border-color:var(--online)">HARVESTING · ${d.harvesting.world}</span>`:''}${inHall?`<span class="away" style="color:var(--warn);border-color:var(--warn)">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()})</span>`:''}</h3>
+        <div class="lvl">${d.stage} · Lv${d.level} · <span class="attr-${d.attribute}">${d.attribute}</span> · <span style="color:${d.color}">${d.element}</span> <span class="stars">${'★'.repeat(d.rarity)}</span></div>
+        <div class="xpbar" style="margin-top:7px"><i style="width:${Math.round(100*d.xp/d.xp_to_next)}%"></i></div>
+        <div class="mono muted" style="font-size:10.5px;margin-top:3px">${d.xp}/${d.xp_to_next} XP · ${d.wins}W ${d.losses}L</div>
+      </div>
+    </div>
+    <div class="statline">
+      <span>HP <b>${d.battle_stats.hp}</b></span><span>ATK <b>${d.battle_stats.atk}</b></span>
+      <span>DEF <b>${d.battle_stats.def}</b></span><span>SPD <b>${d.battle_stats.spd}</b></span>
+      <span class="muted">pw ${d.power}</span>
+    </div>
+    <div>
+      ${meter('Hunger',d.care.hunger,'hunger')}${meter('Energy',d.care.energy,'energy')}
+      ${meter('Happy',d.care.happiness,'happiness')}${meter('Discip.',d.care.discipline,'discipline')}
+      ${meter('Corrupt',d.care.corruption,'corruption')}${meter('Weight',d.care.weight,'weight')}
+    </div>
+    <div class="actions">
+      <button class="btn" data-act="feed" data-id="${d.id}">Feed</button>
+      <button class="btn" data-act="rest" data-id="${d.id}">Rest</button>
+      <button class="btn" data-act="play" data-id="${d.id}">Play</button>
+      <button class="btn" data-act="cleanse" data-id="${d.id}">Cleanse</button>
+    </div>
+    ${inHall?`<div class="muted" style="font-size:11.5px;font-family:var(--mono)">manual training paused — ${d.training.hall_name} is handling it (+${d.training.rate}/h)</div>`:`<div class="actions">
+      <span class="muted" style="font-size:12px;align-self:center">Train:</span>
+      <button class="btn ghost" data-train="hp" data-id="${d.id}">+HP</button>
+      <button class="btn ghost" data-train="atk" data-id="${d.id}">+ATK</button>
+      <button class="btn ghost" data-train="def" data-id="${d.id}">+DEF</button>
+      <button class="btn ghost" data-train="spd" data-id="${d.id}">+SPD</button>
+    </div>`}
+    ${evo?`<div class="actions">${evo}</div>`:''}
+  </div>`;
+}
+function bindDaemonActions(){
+  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.id,act=b.dataset.act;
+    if(act==='evolve'){const r=await api(`/api/daemon/${id}/evolve`,{method:'POST'});if(r.result.ok)toast(`Evolved to ${r.result.to}!`+(r.result.attr_from!==r.result.attr_to?` (now ${r.result.attr_to})`:''));updateCard(r.daemon);return;}
+    const r=await api(`/api/daemon/${id}/care`,{method:'POST',body:JSON.stringify({action:act})});
+    updateCard(r.daemon);
+  });
+  document.querySelectorAll('[data-train]').forEach(b=>b.onclick=async()=>{
+    const r=await api(`/api/daemon/${b.dataset.id}/train`,{method:'POST',body:JSON.stringify({stat:b.dataset.train})});
+    if(!r.result.ok){toast(r.result.reason==='too_tired'?'Too tired to train — let it rest':'Cannot train');return;}
+    toast(`+${r.result.gain} ${b.dataset.train.toUpperCase()}`);updateCard(r.daemon);
+  });
+}
+function updateCard(d){
+  const i=state.roster.findIndex(x=>x.id===d.id);if(i>=0)state.roster[i]=d;
+  const el=document.querySelector(`[data-card="${d.id}"]`);
+  if(el){const tmp=document.createElement('div');tmp.innerHTML=daemonCard(d);el.replaceWith(tmp.firstElementChild);bindDaemonActions();}
+}
+
+/* ---------- helpers ---------- */
+async function refreshRoster(){const r=await api('/api/nest');state.roster=r.daemons;}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
+function modal(html){$('#modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">${html}</div>`;}
+function closeModal(){$('#modal-root').innerHTML='';if(state.view==='scan'&&state.picked){/* stay */}}
+boot();
+</script>
+</body>
+</html>

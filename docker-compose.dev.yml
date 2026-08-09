@@ -1,0 +1,27 @@
+# Development override — live-edit the game without rebuilding the image.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Source is bind-mounted from this directory into the container, so after
+# editing any file just:
+#
+#   docker compose restart aether
+#
+# (~2 seconds, no build). The world clocks are cranked way up so expeditions,
+# presence flips, and care drift happen fast enough to watch. Dev state is
+# kept in a separate ./dev-data directory so your real save is untouched.
+
+services:
+  aether:
+    volumes:
+      - ./app.py:/app/app.py:ro
+      - ./VERSION:/app/VERSION:ro
+      - ./core:/app/core:ro
+      - ./static:/app/static:ro
+      - ./vendor:/app/vendor:ro
+      - ./dev-data:/data
+    environment:
+      AETHER_TICK: "3"
+      AETHER_FIGHT_EVERY: "15"
+      AETHER_PRESENCE_EVERY: "20"
+      AETHER_PRESENCE_GRACE: "40"
