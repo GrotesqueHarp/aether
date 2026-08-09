@@ -200,6 +200,11 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 .synth .pick{flex-direction:column;align-items:flex-start;gap:3px;min-width:96px}
 .synth .pick .cost{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
+.reset-link{margin-top:9px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--dim);cursor:pointer;opacity:.55;transition:.15s}
+.reset-link:hover{color:var(--danger);opacity:1}
+.reset-modal input{width:100%;background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:7px;padding:9px 11px;font-family:var(--mono);font-size:13px;letter-spacing:.1em;margin:4px 0 14px}
+.reset-modal input:focus{outline:none;border-color:var(--danger)}
+
 /* ---- the shaft ---- */
 .depthbar{position:relative;height:10px;background:#0c1220;border:1px solid var(--hair);border-radius:6px;margin:4px 0 8px;overflow:visible}
 .depthbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--aether-dim),var(--aether));border-radius:5px}
@@ -273,6 +278,7 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
     <div class="foot muted">
       <div><span class="dot"></span>Anchor online</div>
       <div class="mono" id="foot-net"></div>
+      <div class="reset-link" onclick="confirmReset()">Reset progression</div>
     </div>
   </nav>
   <div style="display:flex;flex-direction:column;min-width:0">
@@ -328,6 +334,45 @@ async function pollState(){
 }
 setInterval(pollState, 10000);
 
+/* ---------- live refresh ----------
+   The server does everything on its own clock — harvest income, hatching,
+   training, expeditions digging layers, incursions ticking down. Without this
+   the page was a photograph of whenever you last loaded it. */
+const REFRESH_MS = 6000;
+
+function uiBusy(){
+  if(document.hidden) return true;                       // tab in background
+  if(document.querySelector('.overlay')) return true;     // modal or battle open
+  const a=document.activeElement;
+  if(a && ['SELECT','INPUT','TEXTAREA'].includes(a.tagName)) return true; // mid-interaction
+  return false;
+}
+
+async function liveRefresh(){
+  if(uiBusy() || state.refreshing) return;
+  state.refreshing=true;
+  const y=window.scrollY;
+  try{
+    await pollState();
+    if(state.view==='scan' && state.currentRift){
+      const dev=state.currentRift;
+      await riftView(dev);
+    } else if(state.view==='scan'){
+      // redraw the grid from known devices — never auto-trigger a network scan
+      if(state.devices && state.devices.length){ await hydrateRifts(); renderRifts(); }
+    } else if(state.view==='nest'){ await nestView(); }
+    else if(state.view==='bastion'){ await bastionView(); }
+    else if(state.view==='pulse'){ await pulseView(); }
+    state.lastRefresh=Date.now();
+  }catch(e){ /* transient fetch failure: try again next beat */ }
+  window.scrollTo(0,y);
+  state.refreshing=false;
+}
+
+setInterval(liveRefresh, REFRESH_MS);
+// coming back to the tab shouldn't mean staring at stale numbers
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) liveRefresh(); });
+
 /* ---------- procedural SVG sigils (visual identity from the seed) ---------- */
 function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h;}
 function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -382,7 +427,7 @@ async function boot(){
   go('scan');
 }
 function setActive(v){document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===v));}
-function go(v){state.view=v;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView}[v]||scanView)();}
+function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView}[v]||scanView)();}
 
 /* -- first run: hatch the Anchor egg -- */
 function bootstrapView(){
@@ -496,6 +541,7 @@ function manualDialog(){
 
 /* -- a single rift -- */
 async function riftView(dev){
+  state.currentRift=dev;
   const r=(await api(`/api/rift/${dev.mac}?hostname=${encodeURIComponent(dev.hostname||'')}`));
   dev.rift=r;
   const col=r.biome.color;
@@ -916,6 +962,37 @@ function confirmSell(d){
     if(res.error){toast(res.message||res.error);return;}
     toast(`${res.name} released — ${Object.entries(res.payout).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')}`).join(', ')}`);
     pollState(); nestView();
+  };
+}
+
+/* -- danger zone: wipe the save and start over -- */
+function confirmReset(){
+  modal(`<div class="card reset-modal" style="padding:22px;max-width:440px">
+    <h2 style="font-size:19px;margin-bottom:8px;color:var(--danger)">Reset progression?</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:14px">
+      This permanently deletes every daemon, all rift progress and layer depth,
+      resources, facilities, eggs, and the Pulse journal. You'll start over with
+      a fresh Kernel. This cannot be undone.
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:12px">
+      <input type="checkbox" id="keep-dev" checked style="width:auto;margin:0"> Keep discovered devices (skip re-scanning)
+    </label>
+    <div class="mono muted" style="font-size:11px">Type RESET to confirm:</div>
+    <input id="reset-word" placeholder="RESET" autocomplete="off" spellcheck="false">
+    <div style="display:flex;gap:9px">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn" style="border-color:var(--danger);color:var(--danger)" id="do-reset">Reset everything</button>
+    </div></div>`);
+  $('#reset-word').focus();
+  $('#do-reset').onclick=async()=>{
+    if($('#reset-word').value.trim()!=='RESET'){toast('Type RESET to confirm');return;}
+    const keep=$('#keep-dev').checked;
+    const res=await api('/api/reset',{method:'POST',body:JSON.stringify({confirm:'RESET',keep_devices:keep})});
+    closeModal();
+    if(res.error){toast(res.message||res.error);return;}
+    toast('Progression reset — starting over');
+    state.party=[]; state.devices=keep?state.devices:[];
+    await boot();
   };
 }
 

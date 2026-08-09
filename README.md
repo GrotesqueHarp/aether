@@ -179,6 +179,50 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Live updates (v0.8.3)
+
+The page used to be a photograph of whenever you last loaded it — only the
+resource bar polled, so harvest income, hatching eggs, expeditions digging
+layers, and incursion countdowns all sat frozen until you navigated away and
+back. The current view now refreshes itself every 6 seconds.
+
+It stays out of your way:
+
+- **Paused while a modal or battle is open**, so a fight never gets interrupted.
+- **Paused while a dropdown or text field is focused**, so a half-made
+  selection isn't wiped mid-click.
+- **Paused entirely when the tab is hidden**, and refreshes immediately when
+  you come back, so a background tab isn't hammering your server all day.
+- **Scroll position is preserved** across redraws.
+- The rift grid redraws from known devices and **never auto-triggers a network
+  scan**.
+
+## Resetting (v0.8.2)
+
+**Reset progression** sits at the bottom of the sidebar. It deletes every
+daemon, all rift progress and layer depth, resources, facilities, eggs, and the
+Pulse journal, then hands you a fresh Kernel. Discovered devices are kept by
+default, since re-scanning your LAN is busywork rather than progress.
+
+The UI asks you to type RESET. From a shell:
+
+```bash
+curl -X POST localhost:8787/api/reset \
+     -H 'Content-Type: application/json' \
+     -d '{"confirm": "RESET"}'
+
+# also forget discovered devices:
+curl -X POST localhost:8787/api/reset \
+     -H 'Content-Type: application/json' \
+     -d '{"confirm": "RESET", "keep_devices": false}'
+```
+
+The confirmation string is required — a bare POST is refused. This clears rows
+rather than dropping tables, so the schema stays at its current version and no
+migration reruns. The ticker's clocks are reset too; otherwise the first beat
+after a reset would bill the new save for every hour that passed under the old
+one.
+
 ## Automation over clicking (v0.8.1)
 
 The point of the game is building machines that play it, not tapping buttons.

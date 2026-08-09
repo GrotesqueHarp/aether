@@ -56,6 +56,15 @@ _warned: dict[tuple, float] = {}
 WARN_COOLDOWN = 2 * 3600
 
 
+def reset_clocks():
+    """Forget when drift was last applied, and clear the warning cooldowns.
+    Without this the first beat after a reset would bill the new save for
+    every hour that elapsed under the old one."""
+    _warned.clear()
+    db.set_meta("last_tick", str(time.time()))
+    db.set_meta("signal_tick", str(time.time()))
+
+
 # --------------------------------------------------------------------------
 def dormancy(mac: str) -> bool:
     """Is this rift's device currently off the network? Unknown MACs count as

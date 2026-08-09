@@ -619,6 +619,24 @@ def hatchery_synthesize():
     return jsonify(res)
 
 
+# -- danger zone --
+@app.route("/api/reset", methods=["POST"])
+def reset():
+    """Wipe progression and start over. Requires an explicit confirmation
+    string so a stray POST can't nuke a save."""
+    body = request.get_json(force=True, silent=True) or {}
+    if body.get("confirm") != "RESET":
+        return jsonify({"error": "not_confirmed",
+                        "message": 'Send {"confirm": "RESET"} to proceed.'}), 400
+    keep = bool(body.get("keep_devices", True))
+    cleared = db.reset_all(keep_devices=keep)
+    ticker.reset_clocks()
+    db.add_daemon(starter_daemon())
+    db.set_meta("bootstrapped", "1")
+    db.add_event("reset", "The aether was reformatted. Everything begins again.")
+    return jsonify({"ok": True, "cleared": cleared, "kept_devices": keep})
+
+
 # -- the crucible --
 @app.route("/api/crucible")
 def crucible():

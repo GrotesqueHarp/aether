@@ -595,6 +595,40 @@ def hatch_egg_row(egg_id: int):
         c.execute("UPDATE eggs SET state = 'hatched' WHERE id = ?", (egg_id,))
 
 
+# --- reset ------------------------------------------------------------------
+# Everything the game accumulates, in the order it's safe to clear.
+RESETTABLE = ["daemons", "rift_progress", "events", "expeditions", "resources",
+              "harvests", "eggs", "facilities", "training", "incursions"]
+
+
+def reset_all(keep_devices: bool = True) -> dict:
+    """Wipe progression back to a clean save.
+
+    The schema itself is left alone — this clears rows, it does not drop
+    tables, so the DB stays at its current version and no migration reruns.
+    Discovered devices are kept by default: they're just the result of a LAN
+    scan, and rescanning them is busywork rather than progress.
+
+    The ticker's clock keys MUST go too. They store the last time drift was
+    applied, and leaving them behind would make the first tick after a reset
+    apply every hour that passed since the old save's last beat.
+    """
+    counts = {}
+    with _conn() as c:
+        for table in RESETTABLE:
+            counts[table] = c.execute(f"SELECT COUNT(*) n FROM {table}").fetchone()["n"]
+            c.execute(f"DELETE FROM {table}")
+        if not keep_devices:
+            counts["devices"] = c.execute("SELECT COUNT(*) n FROM devices").fetchone()["n"]
+            c.execute("DELETE FROM devices")
+        else:
+            # a fresh save shouldn't inherit stale presence state
+            c.execute("UPDATE devices SET online = 1")
+        # keep schema_version; drop everything else, clocks included
+        c.execute("DELETE FROM meta WHERE key != 'schema_version'")
+    return counts
+
+
 # --- meta -------------------------------------------------------------------
 def get_meta(key: str, default=None):
     with _conn() as c:
