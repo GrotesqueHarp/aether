@@ -179,23 +179,29 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
-## Live updates (v0.8.3)
+## Refreshing (v0.8.4)
 
-The page used to be a photograph of whenever you last loaded it — only the
-resource bar polled, so harvest income, hatching eggs, expeditions digging
-layers, and incursion countdowns all sat frozen until you navigated away and
-back. The current view now refreshes itself every 6 seconds.
+The page updates on two triggers, and there is no blind redraw timer:
 
-It stays out of your way:
+1. **Right after anything you do** — dismissing a battle result, drawing a
+   daemon from a shelf, posting a garrison, building, selling. Closing a dialog
+   is treated as a refresh point, since the world behind it just changed.
+2. **When the server's structural fingerprint changes** — an egg hatched, an
+   expedition dug a layer, the Null arrived, a device went dormant. This is
+   what keeps an idle game honest: most of what goes stale happens with no
+   action at all.
 
-- **Paused while a modal or battle is open**, so a fight never gets interrupted.
-- **Paused while a dropdown or text field is focused**, so a half-made
-  selection isn't wiped mid-click.
-- **Paused entirely when the tab is hidden**, and refreshes immediately when
-  you come back, so a background tab isn't hammering your server all day.
-- **Scroll position is preserved** across redraws.
-- The rift grid redraws from known devices and **never auto-triggers a network
-  scan**.
+The fingerprint deliberately ignores resource totals and harvest counters.
+Those tick constantly and live in the resource bar, which updates on its own
+without redrawing anything — redrawing the whole page because Bits went up is
+what made a fixed interval feel intrusive. Sitting on an unchanged rift view
+now issues no view requests at all.
+
+Care and training use targeted per-card updates rather than a redraw, so
+clicking Feed doesn't rebuild the page.
+
+Redraws still pause while a modal or battle is open, while a dropdown or text
+field is focused, and while the tab is hidden; scroll position is preserved.
 
 ## Resetting (v0.8.2)
 

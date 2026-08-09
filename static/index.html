@@ -323,6 +323,8 @@ function renderResBar(){
 async function pollState(){
   try{
     const st=await api('/api/state');
+    const changed = state.sig !== undefined && st.sig !== state.sig;
+    state.sig = st.sig;
     const oldBits=state.res.bits||0;
     state.res=st.resources||{};state.rates=st.rates||{};state.net=st;
     renderResBar();
@@ -330,48 +332,51 @@ async function pollState(){
       const el=document.querySelector('[data-res="bits"]');
       if(el){el.classList.add('bump');setTimeout(()=>el.classList.remove('bump'),600);}
     }
+    // something actually happened out there — an egg hatched, an expedition
+    // dug a layer, the Null arrived. Only then is a redraw worth it.
+    if(changed) await redrawView();
   }catch(e){}
 }
 setInterval(pollState, 10000);
 
-/* ---------- live refresh ----------
-   The server does everything on its own clock — harvest income, hatching,
-   training, expeditions digging layers, incursions ticking down. Without this
-   the page was a photograph of whenever you last loaded it. */
-const REFRESH_MS = 6000;
+/* ---------- refreshing ----------
+   Two triggers, no blind timer:
+     1. refreshNow() right after anything you do that changes the world
+     2. a redraw when the server's structural fingerprint changes, so idle
+        events (hatching, expeditions, incursions) still surface on their own
+   The resource bar keeps updating independently either way. */
 
-function uiBusy(){
-  if(document.hidden) return true;                       // tab in background
-  if(document.querySelector('.overlay')) return true;     // modal or battle open
-  const a=document.activeElement;
-  if(a && ['SELECT','INPUT','TEXTAREA'].includes(a.tagName)) return true; // mid-interaction
-  return false;
-}
-
-async function liveRefresh(){
+async function redrawView(){
   if(uiBusy() || state.refreshing) return;
   state.refreshing=true;
   const y=window.scrollY;
   try{
-    await pollState();
-    if(state.view==='scan' && state.currentRift){
-      const dev=state.currentRift;
-      await riftView(dev);
-    } else if(state.view==='scan'){
-      // redraw the grid from known devices — never auto-trigger a network scan
+    if(state.view==='scan' && state.currentRift){ await riftView(state.currentRift); }
+    else if(state.view==='scan'){
+      // redraw from known devices — never auto-trigger a network scan
       if(state.devices && state.devices.length){ await hydrateRifts(); renderRifts(); }
-    } else if(state.view==='nest'){ await nestView(); }
+    }
+    else if(state.view==='nest'){ await nestView(); }
     else if(state.view==='bastion'){ await bastionView(); }
     else if(state.view==='pulse'){ await pulseView(); }
-    state.lastRefresh=Date.now();
-  }catch(e){ /* transient fetch failure: try again next beat */ }
+  }catch(e){ /* transient failure: the next check will catch up */ }
   window.scrollTo(0,y);
   state.refreshing=false;
 }
 
-setInterval(liveRefresh, REFRESH_MS);
+function uiBusy(){
+  if(document.hidden) return true;                       // tab in background
+  if(document.querySelector('.overlay')) return true;    // modal or battle open
+  const a=document.activeElement;
+  if(a && ['SELECT','INPUT','TEXTAREA'].includes(a.tagName)) return true;
+  return false;
+}
+
+// call after any action that changes the world
+async function refreshNow(){ state.sig=undefined; await pollState(); await redrawView(); }
+
 // coming back to the tab shouldn't mean staring at stale numbers
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden) liveRefresh(); });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pollState(); });
 
 /* ---------- procedural SVG sigils (visual identity from the seed) ---------- */
 function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h;}
@@ -587,7 +592,7 @@ async function riftView(dev){
   $('#capture').onclick=async()=>{
     const res=await api('/api/capture',{method:'POST',body:JSON.stringify({mac:dev.mac})});
     if(res.error){toast(res.message||res.error);return;}
-    toast(`Captured ${res.daemon.name}!`);await refreshRoster();
+    toast(`Captured ${res.daemon.name}!`);await refreshRoster();await refreshNow();
   };
   $('#main').querySelectorAll('[data-dig]').forEach(b=>{
     b.onclick=()=>{
@@ -750,7 +755,7 @@ function renderIncursion(dev){
   $('#save-gar').onclick=async()=>{
     const res=await api('/api/incursion/garrison',{method:'POST',body:JSON.stringify({mac:dev.mac,daemon_ids:inc.garrison})});
     if(res.error){toast(res.error);return;}
-    toast('Garrison posted');
+    toast('Garrison posted');await refreshNow();
   };
   $('#repel').onclick=async()=>{
     if(!inc.garrison.length){toast('Pick defenders first');return;}
@@ -1099,7 +1104,12 @@ async function refreshRoster(){const r=await api('/api/nest');state.roster=r.dae
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
 function modal(html){$('#modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">${html}</div>`;}
-function closeModal(){$('#modal-root').innerHTML='';if(state.view==='scan'&&state.picked){/* stay */}}
+function closeModal(){
+  $('#modal-root').innerHTML='';
+  // closing a battle result, a sale, or any dialog is the moment the world
+  // behind it is out of date — pull the change through immediately
+  refreshNow();
+}
 boot();
 </script>
 </body>

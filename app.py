@@ -48,6 +48,30 @@ except OSError:
 
 
 # ---- helpers ---------------------------------------------------------------
+def _state_sig() -> str:
+    """A fingerprint of everything STRUCTURAL — the things that change what the
+    page should be drawing, rather than the numbers ticking up inside it.
+
+    Deliberately excludes resource totals and harvest counters: those move
+    every few seconds and live in the resource bar, which updates on its own
+    without redrawing the view. Redrawing the whole page just because Bits went
+    up is what made a fixed refresh interval feel intrusive.
+    """
+    parts = [str(len(db.list_daemons())),
+             str(len(db.list_eggs())),
+             str(len(db.list_harvests())),
+             str(len(db.list_training())),
+             str(len(db.list_expeditions())),
+             str(len(db.list_incursions()))]
+    for dev in db.list_devices():
+        p = db.get_progress(dev["mac"])
+        parts.append(f"{dev['mac']}:{p['cleared']}:{p['tier']}:{p['ward']}:"
+                     f"{p['captures_taken']}:{1 if dev['online'] else 0}")
+    for key, lvl in sorted(db.all_facility_levels().items()):
+        parts.append(f"{key}{lvl}")
+    return str(hash("|".join(parts)) & 0xFFFFFFFF)
+
+
 def _daemon_payload(d: Daemon) -> dict:
     out = d.to_dict()
     ex = db.get_expedition(d.id) if d.id else None
@@ -149,6 +173,7 @@ def state():
     ticker.apply_drift()
     roster = db.list_daemons()
     return jsonify({
+        "sig": _state_sig(),
         "bootstrapped": db.get_meta("bootstrapped") == "1",
         "version": VERSION,
         "schema": db.get_meta("schema_version"),
