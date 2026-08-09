@@ -46,10 +46,15 @@ def milestones(sim: Sim) -> list[tuple[str, str, float | None]]:
 
 
 def tier_days(sim: Sim) -> list[tuple[str, float]]:
-    """Elapsed day of each Overclock, which is the real pacing question."""
+    """Elapsed day each rift reached each tier. Counted PER RIFT — six rifts
+    hitting T1 is not one rift hitting T6."""
+    per: dict[str, int] = {}
     out = []
-    for i, e in enumerate(sim.events(("overclock",)), start=1):
-        out.append((f"Tier {i}", round((e["ts"] - sim.clock.start) / 86400, 2)))
+    for e in sim.events(("overclock",)):
+        mac = e.get("mac") or "?"
+        per[mac] = per.get(mac, 0) + 1
+        out.append((f"{mac[-8:]} -> T{per[mac]}",
+                    round((e["ts"] - sim.clock.start) / 86400, 2)))
     return out
 
 
@@ -115,10 +120,15 @@ def full_report(sim: Sim, stream=sys.stdout):
 
     td = tier_days(sim)
     p("\nOVERCLOCK PACING" if td else "\nOVERCLOCK PACING\n  (no tier ever reached)")
-    prev = 0.0
     for name, day in td:
-        p(f"  {name:32} day {day:6.2f}   (+{day - prev:.2f}d)")
-        prev = day
+        p(f"  {name:32} day {day:6.2f}")
+    if td:
+        peak = {}
+        for name, _ in td:
+            mac, t = name.split(" -> T")
+            peak[mac] = max(peak.get(mac, 0), int(t))
+        p(f"  highest tier on any one rift: T{max(peak.values())}"
+          f"   ({len(peak)} rifts overclocked)")
 
     p("\nFINAL STATE")
     p(f"  roster {last['roster']}   party power {last['party_power']}   "
@@ -168,7 +178,7 @@ def compare(runs: dict[str, Sim], stream=sys.stdout):
     row("party power", lambda s: s.snapshots[-1]["party_power"])
     row("roster", lambda s: s.snapshots[-1]["roster"])
     row("progress score", lambda s: f"{progress_score(s.snapshots[-1]):.0f}")
-    row("tiers reached", lambda s: len(tier_days(s)))
+    row("overclocks", lambda s: len(tier_days(s)))
     row("first boss (day)", lambda s: _fmt(s.milestone("boss")))
     row("first tier (day)", lambda s: _fmt(s.milestone("overclock")))
     row("first hall (day)", lambda s: _fmt(s.milestone("train_start")))

@@ -38,6 +38,14 @@ FIGHT_EVERY = float(os.environ.get("AETHER_FIGHT_EVERY", "150"))
 DRIFT_PER_HOUR = {"hunger": -14, "energy": -10, "happiness": -6,
                   "discipline": -3, "corruption": +4}
 
+# Energy is the meter that gates fighting, and it was the only one with no
+# automation — it drained flat out at -10/h whether or not the daemon was doing
+# anything, so the only way to keep a party combat-ready was clicking Rest
+# around the clock. Now a daemon that isn't posted to a job recovers on its
+# own; working daemons still burn it, just slowly. Idling is how you recover.
+ENERGY_REGEN = float(os.environ.get("AETHER_ENERGY_REGEN", "9"))    # idle, /hr
+ENERGY_WORK_DRAIN = float(os.environ.get("AETHER_ENERGY_WORK", "-3.5"))  # posted
+
 # journal warning cooldowns: (daemon_id, kind) -> last ts
 _warned: dict[tuple, float] = {}
 WARN_COOLDOWN = 2 * 3600
@@ -79,8 +87,13 @@ def apply_drift(now: float | None = None):
     hap_floor = bastion.happiness_floor()
     corr_drain = bastion.corruption_drain_per_hour()
     for d in db.list_daemons():
+        working = bool(db.get_harvest(d.id) or db.get_training(d.id)
+                       or db.get_expedition(d.id))
         for k, per in DRIFT_PER_HOUR.items():
-            rate = per * (hunger_mult if k == "hunger" else 1.0)
+            if k == "energy":
+                rate = ENERGY_WORK_DRAIN if working else ENERGY_REGEN
+            else:
+                rate = per * (hunger_mult if k == "hunger" else 1.0)
             d.care[k] = max(0, min(100, d.care[k] + rate * hours))
         if corr_drain:
             d.care["corruption"] = max(0, d.care["corruption"] - corr_drain * hours)

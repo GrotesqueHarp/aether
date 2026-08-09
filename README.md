@@ -179,6 +179,29 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Rest, and the Overclock trap (v0.7)
+
+**Energy now regenerates.** It used to drain at a flat -10/h whether or not a
+daemon was doing anything, and it was the only care meter with no automation —
+so the only way to keep a party combat-ready was clicking Rest around the
+clock. Now a daemon that isn't posted to a job recovers on its own (+9/h) while
+working daemons burn it slowly (-3.5/h). Idling is how you recover. In
+simulation this removed a 13.5-day dead stretch entirely and tripled party
+power over three weeks. Knobs: `AETHER_ENERGY_REGEN`, `AETHER_ENERGY_WORK`.
+
+**Overclock is no longer a trap.** It costs Cores (rising with tier), the rift
+view previews the Gatekeeper you'd face and warns when your party is
+outmatched, and — most importantly — **Downclock** steps a rift back down.
+Overclocking every clean rift on sight used to leave you with nothing you could
+beat and no way back. Now you can always retreat; Cores just aren't refunded.
+Knob: `AETHER_OVERCLOCK_CORES` (0 = free).
+
+**Borrowable workers.** Harvesters and trainees can join a battle party and
+return to their post afterward — only daemons away on expedition are truly
+unavailable. Previously any daemon assigned to a job was locked out of combat,
+so the only daemon free to fight was whichever hatched most recently: parties
+never formed and the entire 3v3 layer went unused.
+
 ## The Crucible (v0.6.1, backend only)
 
 Which essences you can earn depends on what hardware you own — a LAN with no

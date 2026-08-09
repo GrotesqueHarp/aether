@@ -79,8 +79,25 @@ def _daemon_payload(d: Daemon) -> dict:
 
 
 def _guard_can_fight(d: Daemon):
-    """Battles and expeditions need a free daemon. Care is always allowed —
-    you can visit a harvester at its node or a trainee in its hall."""
+    """Battles BORROW a daemon. Harvesters and trainees are on your own
+    network — they can step away for a fight and go straight back to work
+    afterward. Only an expedition physically removes a daemon from reach.
+
+    This matters more than it sounds: when working daemons were locked out of
+    combat, the only daemon free to fight was whichever hatched most recently,
+    so parties never formed and the whole 3v3 layer sat unused.
+    """
+    ex = db.get_expedition(d.id) if d.id else None
+    if ex and ex["state"] == "active":
+        return jsonify({"error": "on_expedition",
+                        "message": f"{d.name} is away on an expedition. "
+                                   "Recall it first."}), 400
+    return None
+
+
+def _guard_can_commit(d: Daemon):
+    """Long-term postings are exclusive — a daemon can't harvest, train, and
+    be on expedition at once."""
     ex = db.get_expedition(d.id) if d.id else None
     if ex and ex["state"] == "active":
         return jsonify({"error": "on_expedition",
@@ -95,6 +112,18 @@ def _guard_can_fight(d: Daemon):
                         "message": f"{d.name} is training in a hall. "
                                    "Withdraw it first."}), 400
     return None
+
+
+def _settle_work(d: Daemon):
+    """Pay out a borrowed worker's earnings up to now, so a fight can't
+    retroactively change what it already earned."""
+    hv = db.get_harvest(d.id) if d.id else None
+    if hv:
+        try:
+            economy.accrue_harvest(d, generate_rift(hv["mac"]), hv,
+                                   ticker.dormancy(hv["mac"]))
+        except ValueError:
+            pass
 
 
 def _guard_available(d: Daemon):
@@ -207,6 +236,9 @@ def rift(mac):
             n["enemy_level"] = e.level
     r["fully_cleared"] = (r["progress"]["cleared"] >= len(r["nodes"])
                          and bool(r["progress"]["boss_down"]))
+    r["overclock_cost"] = war.overclock_cost(r["progress"]["tier"])
+    r["next_tier_boss_power"] = war.next_tier_boss_power(r["mac"])
+    r["can_downclock"] = r["progress"]["tier"] > 0
     inc = db.get_incursion(r["mac"])
     r["incursion"] = None
     if inc:
@@ -314,6 +346,7 @@ def battle():
         guard = _guard_can_fight(d)
         if guard:
             return guard
+        _settle_work(d)
         party.append(d)
     if not party:
         return jsonify({"error": "no_daemon"}), 404
@@ -426,7 +459,7 @@ def expedition_start():
     d = db.get_daemon(body.get("daemon_id") or -1)
     if not d:
         return jsonify({"error": "no_daemon"}), 404
-    guard = _guard_can_fight(d)
+    guard = _guard_can_commit(d)
     if guard:
         return guard
     mac = body.get("mac")
@@ -475,7 +508,7 @@ def harvest_start():
     d = db.get_daemon(body.get("daemon_id") or -1)
     if not d:
         return jsonify({"error": "no_daemon"}), 404
-    guard = _guard_can_fight(d)
+    guard = _guard_can_commit(d)
     if guard:
         return guard
     mac = body.get("mac")
@@ -614,7 +647,7 @@ def bastion_train():
     d = db.get_daemon(body.get("daemon_id") or -1)
     if not d:
         return jsonify({"error": "no_daemon"}), 404
-    guard = _guard_can_fight(d)
+    guard = _guard_can_commit(d)
     if guard:
         return guard
     res = bastion.assign(d.id, body.get("hall", ""))
@@ -660,6 +693,22 @@ def overclock():
     db.add_event("overclock",
                  f"{r['world_name']} has been OVERCLOCKED to Tier {res['tier']} — "
                  f"the rift reboots hungrier and richer.", mac=r["mac"])
+    return jsonify(res)
+
+
+@app.route("/api/downclock", methods=["POST"])
+def downclock():
+    body = request.get_json(force=True)
+    try:
+        r = generate_rift(body.get("mac"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    res = war.downclock(r["mac"])
+    if not res.get("ok"):
+        return jsonify(res), 400
+    db.add_event("downclock",
+                 f"{r['world_name']} powers down to Tier {res['tier']} — "
+                 f"the rift cools and must be retaken.", mac=r["mac"])
     return jsonify(res)
 
 

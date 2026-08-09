@@ -480,6 +480,7 @@ async function riftView(dev){
       <button class="btn ghost" onclick="go('scan')">← All rifts</button>
     </div>
     <div id="inc-host"></div>
+    <div id="downclock-host"></div>
 
     <div class="section-title">Habitats</div>
     <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
@@ -530,6 +531,7 @@ async function riftView(dev){
   renderExpedBar(dev);
   renderIncursion(dev);
   renderOverclock(dev);
+  renderDownclock(dev);
   $('#capture').onclick=async()=>{
     const res=await api('/api/capture',{method:'POST',body:JSON.stringify({mac:dev.mac})});
     if(res.error){toast(res.message||res.error);return;}
@@ -582,15 +584,39 @@ function renderOverclock(dev){
   const r=dev.rift;
   if(!r.fully_cleared)return;
   const host=$('#exped-bar');
-  host.insertAdjacentHTML('afterend',`<div class="card" style="border-color:var(--warn);padding:13px 16px;margin-bottom:12px;display:flex;align-items:center;gap:14px;max-width:640px">
-    <div style="flex:1"><b style="color:var(--warn)">Fully stabilized.</b> <span class="muted" style="font-size:13px">Overclock to Tier ${r.progress.tier+1}: the rift resets — enemies ×1.6 stronger, all yields ×2. Harvesters will withdraw.</span></div>
-    <button class="btn" style="border-color:var(--warn);color:var(--warn)" id="overclock">Overclock</button></div>`);
+  const oc = Object.entries(r.overclock_cost||{}).map(([k,v])=>`${fmt(v)} ${k}`).join(' + ');
+  const party = (state.roster||[]).filter(d=>!d.on_expedition).slice(0,3);
+  const partyPw = party.reduce((a,d)=>a+d.power,0);
+  const next = r.next_tier_boss_power||0;
+  const risky = next > partyPw*1.15;
+  host.insertAdjacentHTML('afterend',`<div class="card" style="border-color:var(--warn);padding:13px 16px;margin-bottom:12px;max-width:680px">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="flex:1"><b style="color:var(--warn)">Fully stabilized.</b> <span class="muted" style="font-size:13px">Overclock to Tier ${r.progress.tier+1}: the rift resets — enemies ×1.6 stronger, all yields ×2. Harvesters will withdraw.</span></div>
+      <button class="btn" style="border-color:var(--warn);color:var(--warn)" id="overclock">Overclock${oc?` · ${oc}`:''}</button>
+    </div>
+    <div class="mono" style="font-size:11px;margin-top:9px;color:${risky?'var(--danger)':'var(--muted)'}">
+      next Gatekeeper ≈ pw${fmt(next)} + minions · your party pw${fmt(partyPw)}${risky?' — you would likely lose this. You can Downclock later if you overreach.':''}
+    </div></div>`);
   $('#overclock').onclick=async()=>{
     const res=await api('/api/overclock',{method:'POST',body:JSON.stringify({mac:dev.mac})});
     if(res.error||!res.ok){toast(res.reason||res.error||'Cannot overclock');return;}
     toast(`OVERCLOCKED — Tier ${res.tier}`);await refreshRoster();riftView(dev);
   };
 }
+function renderDownclock(dev){
+  const r=dev.rift, host=$('#downclock-host');
+  if(!host)return;
+  if(!r.can_downclock){host.innerHTML='';return;}
+  host.innerHTML=`<div class="card" style="padding:10px 14px;margin-bottom:12px;max-width:680px;display:flex;align-items:center;gap:12px">
+    <div style="flex:1" class="muted" style="font-size:12.5px">Pushed this rift too far? <b>Downclock</b> steps it back to Tier ${r.progress.tier-1}. The rift reboots and must be retaken; Cores are not refunded.</div>
+    <button class="btn ghost" id="downclock">Downclock → T${r.progress.tier-1}</button></div>`;
+  $('#downclock').onclick=async()=>{
+    const res=await api('/api/downclock',{method:'POST',body:JSON.stringify({mac:dev.mac})});
+    if(res.error||!res.ok){toast(res.reason||res.error||'Cannot downclock');return;}
+    toast(`Powered down to Tier ${res.tier}`);await refreshRoster();riftView(dev);
+  };
+}
+
 function renderIncursion(dev){
   const r=dev.rift, host=$('#inc-host');
   if(!r.incursion){host.innerHTML='';return;}

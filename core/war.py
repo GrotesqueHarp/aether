@@ -54,10 +54,33 @@ def scale_enemy(enemy: Daemon, progress: dict) -> Daemon:
     return enemy
 
 
+OVERCLOCK_CORES = float(os.environ.get("AETHER_OVERCLOCK_CORES", "3"))
+
+
+def overclock_cost(tier: int) -> dict:
+    """Pushing a tier costs Cores, and costs more the deeper you go. Free
+    overclocking was a trap: it looks like pure progress, so you take it on
+    every rift at once and wake up with nothing but Tier-1 bosses to fight."""
+    return {"cores": round(OVERCLOCK_CORES * (1 + tier), 1)} if OVERCLOCK_CORES else {}
+
+
+def next_tier_boss_power(mac: str, tier_delta: int = 1) -> int:
+    """What the Gatekeeper would hit like one tier up — so the UI can warn
+    before you commit, instead of after."""
+    from .world import generate_rift
+    rift = generate_rift(mac)
+    prog = db.get_progress(mac)
+    boss = Daemon.from_dict(rift["nodes"][-1]["enemy"])
+    return scale_enemy(boss, {"tier": prog["tier"] + tier_delta}).power()
+
+
 def overclock(mac: str, n_nodes: int) -> dict:
     prog = db.get_progress(mac)
     if prog["cleared"] < n_nodes or not prog["boss_down"]:
         return {"ok": False, "reason": "not_fully_cleared"}
+    cost = overclock_cost(prog["tier"])
+    if cost and not db.res_spend(cost):
+        return {"ok": False, "reason": "cant_afford", "cost": cost}
     # eject harvesters — the world is about to reset under them
     for h in db.list_harvests(mac):
         d = db.get_daemon(h["daemon_id"])
@@ -69,7 +92,29 @@ def overclock(mac: str, n_nodes: int) -> dict:
     db.end_incursion(mac)
     db.set_progress_fields(mac, cleared=0, boss_down=0,
                            tier=prog["tier"] + 1, signal=0.0)
-    return {"ok": True, "tier": prog["tier"] + 1}
+    return {"ok": True, "tier": prog["tier"] + 1, "cost": cost}
+
+
+def downclock(mac: str) -> dict:
+    """Step a rift back down a tier. Overclocking is irreversible in most idle
+    games and that's exactly what makes it a trap — push every rift too far and
+    there is no content left you can beat. Here you can always retreat: the
+    rift reboots one tier lower and you reconquer it. Cores are not refunded,
+    so it still stings."""
+    prog = db.get_progress(mac)
+    if prog["tier"] <= 0:
+        return {"ok": False, "reason": "already_base"}
+    for h in db.list_harvests(mac):
+        d = db.get_daemon(h["daemon_id"])
+        db.end_harvest(h["daemon_id"])
+        if d:
+            db.add_event("harvest_ejected",
+                         f"{d.name} withdraws as the rift powers down.",
+                         mac=mac, daemon_id=d.id)
+    db.end_incursion(mac)
+    db.set_progress_fields(mac, cleared=0, boss_down=0,
+                           tier=prog["tier"] - 1, signal=0.0)
+    return {"ok": True, "tier": prog["tier"] - 1}
 
 
 # ------------------------------------------------------------ null squads ---

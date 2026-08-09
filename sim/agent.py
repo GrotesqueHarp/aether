@@ -38,6 +38,21 @@ BUILD_ORDERS = {
 
 
 # --------------------------------------------------------------- forecasting
+def odds_vs_tier(sim, party: list[Daemon], mac: str, tier: int,
+                 trials: int = 15) -> float:
+    """Could this party beat the Gatekeeper if the rift were at `tier`?
+    Used to look one Overclock ahead before committing to it."""
+    if not party:
+        return 0.0
+    rift = sim.world.generate_rift(mac)
+    boss = sim.war.scale_enemy(
+        Daemon.from_dict(rift["nodes"][-1]["enemy"]), {"tier": tier})
+    foes = [boss] + sim.war.boss_minions(boss, rift, {"tier": tier})
+    wins = sum(simulate_team(party, foes, seed_extra=f"peek:{tier}:{i}"
+                             )["winner"] == "a" for i in range(trials))
+    return wins / trials
+
+
 def battle_odds(sim, party: list[Daemon], mac: str, node_index: int,
                 trials: int = 21) -> float:
     """Win probability for this party against this node, right now."""
@@ -72,6 +87,8 @@ class PlayerPolicy(Policy):
                  strategy: str = "balanced",
                  use_expeditions: bool = True, use_crucible: bool = True,
                  crucible_reserve: float = 0.6,
+                 overclock_lookahead: float = 0.5,
+                 use_downclock: bool = True,
                  max_roster: int = 8,
                  fighters: int = 3, harvest_share: float = 0.6):
         self.sessions_per_day = sessions_per_day
@@ -85,6 +102,8 @@ class PlayerPolicy(Policy):
         self.use_expeditions = use_expeditions
         self.use_crucible = use_crucible
         self.crucible_reserve = crucible_reserve
+        self.overclock_lookahead = overclock_lookahead
+        self.use_downclock = use_downclock
         self.max_roster = max_roster
         self.fighters = fighters
         self.harvest_share = harvest_share
@@ -129,9 +148,10 @@ class PlayerPolicy(Policy):
                 or sim.db.get_training(d.id))
 
     def _party(self, sim):
-        """Top N daemons that are free to fight."""
-        return [d for d in self._roster(sim) if not self._busy(sim, d)
-                ][:self.fighters]
+        """Your strongest daemons. Harvesters and trainees can be borrowed for
+        a fight; only daemons away on expedition are truly unavailable."""
+        return [d for d in self._roster(sim)
+                if not sim.db.get_expedition(d.id)][:self.fighters]
 
     # -- the session ---------------------------------------------------------
     def act(self, sim):
@@ -143,6 +163,11 @@ class PlayerPolicy(Policy):
         self._next_session = now + 86400.0 / self.sessions_per_day
         self.sessions += 1
         self._session_start_actions = self.actions
+        # Conversions are one-way per session. Without this the agent would
+        # transmute loam->ferro for one purchase then ferro->loam for the
+        # next, paying the loss twice to end up poorer.
+        self._produced: set[str] = set()
+        self._consumed: set[str] = set()
         r = self._roster(sim)
         self.note(sim, "session", f"check-in #{self.sessions}",
                   f"roster={len(r)} party_pw={sum(d.power() for d in r[:3])} "
@@ -156,6 +181,7 @@ class PlayerPolicy(Policy):
         self.do_build(sim)
         self.do_assign(sim)
         self.do_overclock(sim)
+        self.do_retreat(sim)
         self.do_expeditions(sim)
 
     # -- 1. keep everyone alive ---------------------------------------------
@@ -356,6 +382,9 @@ class PlayerPolicy(Policy):
                 want = res.split(".")[1]
                 if not richest or richest == res:
                     return False
+                src = richest.split(".")[1]
+                if src in self._produced or want in self._consumed:
+                    return False        # would undo an earlier conversion
                 amt = max(1, round(missing))
                 if amt * sim.economy.TRANSMUTE_BITS_PER > budget:
                     return False
@@ -365,8 +394,10 @@ class PlayerPolicy(Policy):
                                    {"from": richest.split(".")[1], "to": want,
                                     "amount": amt})
                 if st == 200 and r.get("ok"):
+                    self._consumed.add(src)
+                    self._produced.add(want)
                     self.note(sim, "crucible", f"transmute -> {amt:.0f} {want}",
-                              f"from {richest.split('.')[1]}")
+                              f"from {src}")
                     return True
                 return False
         return False
@@ -399,10 +430,39 @@ class PlayerPolicy(Policy):
             prog = sim.db.get_progress(mac)
             if prog["cleared"] < len(rift["nodes"]) or not prog["boss_down"]:
                 continue
-            # only push the tier if we could still handle the boss comfortably
-            if battle_odds(sim, self._party(sim), mac, len(rift["nodes"]) - 1) > 0.85:
-                self._post(sim, "/api/overclock", {"mac": mac})
-                self.note(sim, "overclock", f"{dev['hostname'][:14]} -> T{prog['tier']+1}")
+            # Look one tier ahead. Overclocking every clean rift on sight is
+            # how you end up with nothing you can beat.
+            party = self._party(sim)
+            ahead = odds_vs_tier(sim, party, mac, prog["tier"] + 1)
+            if ahead < self.overclock_lookahead:
+                self.note(sim, "overclock", f"hold {dev['hostname'][:14]}",
+                          f"T{prog['tier']+1} boss odds={ahead:.0%}")
+                continue
+            st, res = self._post(sim, "/api/overclock", {"mac": mac})
+            if st == 200:
+                self.note(sim, "overclock", f"{dev['hostname'][:14]} -> T{prog['tier']+1}",
+                          f"next-boss odds={ahead:.0%}")
+
+    def do_retreat(self, sim):
+        """Stuck everywhere? Power a rift down rather than sit frozen."""
+        if not self.use_downclock or not self._budget():
+            return
+        party = self._party(sim)
+        best, worst_mac, worst_tier = 0.0, None, 0
+        for dev in sim.db.list_devices():
+            mac = dev["mac"]
+            prog = sim.db.get_progress(mac)
+            rift = sim.world.generate_rift(mac)
+            node = prog["cleared"]
+            if node < len(rift["nodes"]):
+                best = max(best, battle_odds(sim, party, mac, node, trials=9))
+            if prog["tier"] > worst_tier:
+                worst_mac, worst_tier = mac, prog["tier"]
+        if best < 0.2 and worst_mac:
+            st, _ = self._post(sim, "/api/downclock", {"mac": worst_mac})
+            if st == 200:
+                self.note(sim, "overclock", f"RETREAT {worst_mac[-8:]}",
+                          f"nothing winnable (best {best:.0%}); T{worst_tier}->T{worst_tier-1}")
 
     def do_expeditions(self, sim):
         """Hands-off progress between sessions."""

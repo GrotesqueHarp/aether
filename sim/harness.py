@@ -64,7 +64,13 @@ class Sim:
         self.snapshots: list[dict] = []
         self._step_count = 0
 
-        # --- environment: sim defaults, caller overrides win
+        # --- environment: sim defaults, caller overrides win.
+        # Every AETHER_* key is cleared first: os.environ.update() only adds,
+        # so without this a knob set by an earlier run in the same process
+        # silently leaks into the next one and an A/B compares a config
+        # against itself.
+        for key in [k for k in os.environ if k.startswith("AETHER_")]:
+            del os.environ[key]
         self.env = {
             "AETHER_DB": self.db_path,
             "AETHER_ECON_MULT": "1.0",
