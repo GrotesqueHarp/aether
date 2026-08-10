@@ -20,6 +20,25 @@ back.
 - Traits, squad synergies, expedition orders, milestones, creature behaviours,
   and the shaft in cross-section.
 
+## [0.12.0]
+
+### Added
+- **Ascension**, the first of the prestige systems. A daemon at Mega and level
+  60 can be unmade back to a Hatchling, keeping its seed, name and record while
+  gaining a permanent **lineage rank**: +18% to all stats, compounding per
+  rank, with a rarity refinement at ranks 3 and 6. Costs Cores, rising per
+  rank.
+- Rank marks (✦) beside ascended daemons, and a warmer halo in the Tank that
+  brightens with rank.
+
+### Changed
+- Ascension is deliberately the exponential channel the player lacked. Rift
+  tiers scale enemies x1.6 each while levelling and halls add linearly, so
+  without a compounding track of your own the curve eventually outruns any
+  amount of grinding.
+- No migration needed: daemons are stored as JSON blobs, so the new field
+  defaults cleanly on old saves.
+
 ## [0.11.0] — Schema v8
 
 ### Added

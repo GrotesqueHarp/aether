@@ -244,6 +244,8 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .awayhl{margin-top:13px;border-top:1px solid var(--hair);padding-top:10px}
 .awayhl-row{font-size:12.5px;color:var(--muted);padding:3px 0}
 
+.asc-rank{color:var(--warn);font-size:13px;letter-spacing:1px;margin-left:4px}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -1043,6 +1045,31 @@ async function renderHatchery(){
   });
 }
 
+function confirmAscend(d){
+  const cost=Object.entries(d.ascend_cost||{}).map(([k,v])=>`${fmt(v)} ${k}`).join(' + ');
+  modal(`<div class="card" style="padding:22px;max-width:470px">
+    <h2 style="font-size:19px;margin-bottom:8px;color:var(--warn)">Ascend ${d.name}?</h2>
+    <div class="muted" style="font-size:13px;line-height:1.6;margin-bottom:14px">
+      ${d.name} returns to a <b>Hatchling at level 1</b>, losing every level and stage it has earned.<br><br>
+      In exchange it gains <b>lineage rank ${d.ascensions+1}</b>: a permanent
+      <b>+18% to all stats, compounding</b> with every rank it holds. It keeps its name,
+      its genome and its record${[3,6].includes(d.ascensions+1)?', and this rank refines it to a higher rarity':''}.<br><br>
+      Power now: <b>${fmt(d.power)}</b> — it will drop hard, then climb past this.
+    </div>
+    <div class="mono" style="font-size:12px;color:var(--dim);margin-bottom:16px">costs ${cost}</div>
+    <div style="display:flex;gap:9px">
+      <button class="btn" onclick="closeModal()">Not yet</button>
+      <button class="btn" style="border-color:var(--warn);color:var(--warn)" id="do-ascend">Ascend</button>
+    </div></div>`);
+  $('#do-ascend').onclick=async()=>{
+    const res=await api(`/api/daemon/${d.id}/ascend`,{method:'POST',body:JSON.stringify({})});
+    closeModal();
+    if(res.error){toast(res.message||res.error);return;}
+    toast(`${d.name} ascended to rank ${res.rank}`);
+    pollState(); nestView();
+  };
+}
+
 function confirmSell(d){
   const val=Object.entries(d.sell_value||{}).map(([k,v])=>`${fmt(v)} ${k.replace('essence.','')}`).join(' · ');
   modal(`<div class="card" style="padding:22px;max-width:430px">
@@ -1576,6 +1603,14 @@ function tankDraw(ctx, c, W, H){
   ctx.globalAlpha = alpha;
 
   // rare daemons carry a halo
+  const rank = d.ascensions || 0;
+  if(rank > 0){
+    const gr = ctx.createRadialGradient(0,0,size*0.5,0,0,size*(2.4+0.25*rank));
+    gr.addColorStop(0, '#E8C84D'+Math.min(90, 30+rank*12).toString(16));
+    gr.addColorStop(1, '#E8C84D00');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(0,0,size*(2.4+0.25*rank),0,Math.PI*2); ctx.fill();
+  }
   if((d.rarity||1) >= 3){
     const g = ctx.createRadialGradient(0,0,size*0.4,0,0,size*2.1);
     g.addColorStop(0, col+'44'); g.addColorStop(1, col+'00');
@@ -1723,11 +1758,12 @@ function flashTo(selector){
 function daemonCard(d){
   const away=d.on_expedition, mining=!!d.harvesting, inHall=!!d.training;
   const evo = d.can_evolve&&!away?`<button class="btn primary" data-act="evolve" data-id="${d.id}">Evolve → next stage</button>`:'';
+  const asc = d.can_ascend&&!away?`<button class="btn" style="border-color:var(--warn);color:var(--warn)" data-ascend="${d.id}">Ascend ✦ rank ${d.ascensions+1}</button>`:'';
   return `<div class="card daemon ${away?'is-away':''}" data-card="${d.id}">
     <div class="head">
       <div class="sig">${daemonSigil(d)}</div>
       <div class="title">
-        <h3>${d.name} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()}) ↗</span>`:''}</h3>
+        <h3>${d.name}${d.ascensions?`<span class="asc-rank" title="Ascension rank ${d.ascensions}">${'✦'.repeat(Math.min(d.ascensions,5))}${d.ascensions>5?d.ascensions:''}</span>`:''} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()}) ↗</span>`:''}</h3>
         <div class="lvl">${d.stage} · Lv${d.level} · <span class="attr-${d.attribute}">${d.attribute}</span> · <span style="color:${d.color}">${d.element}</span> <span class="stars">${'★'.repeat(d.rarity)}</span></div>
         <div class="xpbar" style="margin-top:7px"><i style="width:${Math.round(100*d.xp/d.xp_to_next)}%"></i></div>
         <div class="mono muted" style="font-size:10.5px;margin-top:3px">${d.xp}/${d.xp_to_next} XP · ${d.wins}W ${d.losses}L</div>
@@ -1757,7 +1793,7 @@ function daemonCard(d){
       <button class="btn ghost" data-train="def" data-id="${d.id}">+DEF</button>
       <button class="btn ghost" data-train="spd" data-id="${d.id}">+SPD</button>
     </div>`}
-    ${evo?`<div class="actions">${evo}</div>`:''}
+    ${(evo||asc)?`<div class="actions">${evo}${asc}</div>`:''}
   </div>`;
 }
 function bindDaemonActions(){
@@ -1766,6 +1802,10 @@ function bindDaemonActions(){
     if(act==='evolve'){const r=await api(`/api/daemon/${id}/evolve`,{method:'POST'});if(r.result.ok)toast(`Evolved to ${r.result.to}!`+(r.result.attr_from!==r.result.attr_to?` (now ${r.result.attr_to})`:''));updateCard(r.daemon);return;}
     const r=await api(`/api/daemon/${id}/care`,{method:'POST',body:JSON.stringify({action:act})});
     updateCard(r.daemon);
+  });
+  document.querySelectorAll('[data-ascend]').forEach(b=>b.onclick=()=>{
+    const d=state.roster.find(x=>x.id===+b.dataset.ascend);
+    if(d)confirmAscend(d);
   });
   document.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{
     const d=state.roster.find(x=>x.id===+b.dataset.sell);

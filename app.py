@@ -34,6 +34,7 @@ except ModuleNotFoundError:
             "pip install flask")
 
 from core import db, scan, ticker, economy, bastion, war
+from core import daemon as daemon_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
 from core import world as world_mod
@@ -399,6 +400,35 @@ def evolve(did):
             txt += f" — its nature shifted to {res['attr_to']}"
         db.add_event("evolve", txt + ".", daemon_id=d.id)
     return jsonify({"result": res, "daemon": _daemon_payload(d)})
+
+
+@app.route("/api/daemon/<int:did>/ascend", methods=["POST"])
+def ascend(did):
+    d = db.get_daemon(did)
+    if not d:
+        return jsonify({"error": "not_found"}), 404
+    if not d.can_ascend():
+        return jsonify({"error": "not_ready",
+                        "message": f"{d.name} must reach Mega and level "
+                                   f"{daemon_mod.ASCEND_LEVEL} to ascend."}), 400
+    ex = db.get_expedition(did)
+    if ex and ex["state"] == "active":
+        return jsonify({"error": "on_expedition",
+                        "message": f"{d.name} is away on an expedition. "
+                                   "Recall it first."}), 400
+    cost = d.ascend_cost()
+    if not db.res_spend(cost):
+        return jsonify({"error": "cant_afford", "cost": cost}), 400
+    # a Hatchling can't hold down a post or a hall place
+    db.end_harvest(did)
+    db.end_training(did)
+    res = d.ascend()
+    db.save_daemon(d)
+    db.add_event("ascend",
+                 f"{d.name} ascended to rank {res['rank']} — unmade back to a "
+                 f"Hatchling, and stronger for it "
+                 f"({'★' * d.rarity}).", daemon_id=did)
+    return jsonify({"ok": True, **res, "daemon": _daemon_payload(d), "cost": cost})
 
 
 @app.route("/api/daemon/<int:did>/sell", methods=["POST"])

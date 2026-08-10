@@ -223,6 +223,23 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Ascension (v0.12)
+
+The first prestige loop. A daemon that reaches **Mega at level 60** can be
+**ascended**: it returns to a Hatchling at level 1, losing every level and
+stage, and gains a permanent **lineage rank** worth +18% to all stats,
+compounding with every rank it holds. At ranks 3 and 6 the lineage refines to a
+higher rarity. It keeps its seed, name and record — it is recognisably the same
+creature you raised, which is the point.
+
+This exists for a mechanical reason as much as a sentimental one: rift tiers
+scale enemies x1.6 each, while levelling and training halls add linearly. Without
+a compounding channel of your own, the curve eventually outruns any amount of
+grinding. Ascension is that channel.
+
+Costs Cores, rising per rank. Knobs: `AETHER_ASCEND_MULT`,
+`AETHER_ASCEND_LEVEL`, `AETHER_ASCEND_CORES`.
+
 ## Records & homecoming (v0.11)
 
 **Records** (sidebar) charts Bits, income, party power, lifetime layers, Cores,

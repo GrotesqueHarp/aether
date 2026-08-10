@@ -9,6 +9,8 @@ daemons. Care and training then take over and make each raised daemon personal.
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -26,6 +28,14 @@ CARE_DEFAULTS = {
     "corruption": 5,   # aether rot; neglect pushes toward Virus evolutions
     "weight": 20,      # affects SPD; overfeeding raises it
 }
+
+# --- ascension tuning -------------------------------------------------------
+# Compounding per rank, so lineage keeps pace with tier scaling rather than
+# falling behind it. 1.18 gives ~2.3x by rank 5 and ~5x by rank 10.
+ASCEND_STAT_MULT = float(os.environ.get("AETHER_ASCEND_MULT", "1.18"))
+ASCEND_LEVEL = int(os.environ.get("AETHER_ASCEND_LEVEL", "60"))
+ASCEND_CORE_BASE = float(os.environ.get("AETHER_ASCEND_CORES", "6"))
+ASCEND_RARITY_RANKS = (3, 6)
 
 # Manual training is intentionally weak — see Daemon.train
 TRAIN_ENERGY_FLOOR = 40      # must be well rested to hand-train at all
@@ -76,6 +86,7 @@ class Daemon:
     care: dict = field(default_factory=lambda: dict(CARE_DEFAULTS))
     wins: int = 0
     losses: int = 0
+    ascensions: int = 0         # lineage rank — see ascend()
     id: Optional[int] = None    # set by the DB layer
 
     # ---- derived battle stats ------------------------------------------------
@@ -85,6 +96,11 @@ class Daemon:
         # stage multiplier: later forms are simply bigger
         stage_mult = 1.0 + 0.22 * content.STAGES.index(self.stage)
         val = grown * stage_mult
+        # Lineage compounds. Rift tiers scale enemies exponentially (x1.6 per
+        # tier) while levelling and halls add linearly, so without a
+        # multiplicative channel of your own the curve eventually outruns you
+        # no matter how long you grind. Ascension is that channel.
+        val *= ASCEND_STAT_MULT ** self.ascensions
         # care modifiers
         if key == "spd":
             val *= 1.0 - min(self.care["weight"], 90) / 300.0      # heavy = slow
@@ -101,6 +117,35 @@ class Daemon:
     def power(self) -> int:
         s = self.battle_stats()
         return s["hp"] // 4 + s["atk"] + s["def"] + s["spd"]
+
+    # ---- ascension -----------------------------------------------------------
+    def can_ascend(self) -> bool:
+        return self.stage == content.STAGES[-1] and self.level >= ASCEND_LEVEL
+
+    def ascend_cost(self) -> dict:
+        return {"cores": float(ASCEND_CORE_BASE * (self.ascensions + 1))}
+
+    def ascend(self) -> dict:
+        """Return a fully-grown daemon to a Hatchling, permanently stronger.
+
+        It keeps its seed, so it is recognisably the same creature — the point
+        is a lineage you've raised repeatedly, not a fresh roll. Wins, losses
+        and name carry over; levels and stage do not.
+        """
+        if not self.can_ascend():
+            return {"ok": False, "reason": "not_ready"}
+        before = self.power()
+        self.ascensions += 1
+        self.stage = "Hatchling"
+        self.level = 1
+        self.xp = 0
+        self.care = dict(CARE_DEFAULTS)
+        # a lineage refines itself: rarer at ranks 3 and 6
+        if self.ascensions in ASCEND_RARITY_RANKS and self.rarity < 5:
+            self.rarity += 1
+        return {"ok": True, "rank": self.ascensions,
+                "power_before": before, "power_after": self.power(),
+                "rarity": self.rarity}
 
     def xp_to_next(self) -> int:
         return 20 + self.level * self.level * 6
@@ -208,6 +253,9 @@ class Daemon:
         d["power"] = self.power()
         d["xp_to_next"] = self.xp_to_next()
         d["can_evolve"] = self.can_evolve()
+        d["can_ascend"] = self.can_ascend()
+        d["ascend_cost"] = self.ascend_cost()
+        d["ascend_level"] = ASCEND_LEVEL
         d["color"] = content.ELEMENT_COLORS.get(self.element, "#8B7CF6")
         return d
 
@@ -216,7 +264,7 @@ class Daemon:
         keep = {k: d[k] for k in (
             "seed", "attribute", "element", "rarity", "base_stats", "growth",
             "sigil", "origin_mac", "name", "stage", "level", "xp", "care",
-            "wins", "losses", "id") if k in d}
+            "wins", "losses", "ascensions", "id") if k in d}
         return cls(**keep)
 
 
