@@ -39,6 +39,22 @@ $DC build --quiet
 $DC up -d
 c_ok "Container up (v$OLD_VER -> v$NEW_VER)"
 
+# show what actually changed, if anything did
+if [[ "$OLD_VER" != "$NEW_VER" && -f CHANGELOG.md ]]; then
+  printf '\n'
+  awk -v old="$OLD_VER" '
+    /^## \[/ {
+      ver = $0; sub(/^## \[/, "", ver); sub(/\].*$/, "", ver)
+      if (ver == old) exit
+      if (ver == "Unreleased") { show = 0; next }   # not shipped yet
+      show = 1; print "  " $0; next
+    }
+    show && /^### / { print "  " $0; next }
+    show && /^- /   { print "  " $0; next }
+  ' CHANGELOG.md
+  printf '\n'
+fi
+
 # 3. verify it actually came back healthy
 PORT="${AETHER_PORT:-8787}"
 for i in $(seq 1 15); do

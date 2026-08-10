@@ -686,6 +686,67 @@ def hatchery_synthesize():
     return jsonify(res)
 
 
+# -- changelog --
+CHANGELOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "CHANGELOG.md")
+
+
+def _parse_changelog() -> list[dict]:
+    """Turn CHANGELOG.md into structured releases.
+
+    Parsed rather than shipped raw so the UI can mark which entries are newer
+    than the version you last read, and so a malformed heading fails loudly
+    here instead of rendering as garbage in the browser.
+    """
+    try:
+        with open(CHANGELOG_PATH, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return []
+    releases, cur, section = [], None, None
+    for raw in lines:
+        line = raw.rstrip()
+        if line.startswith("## "):
+            head = line[3:].strip()
+            ver = head.split("]")[0].lstrip("[") if head.startswith("[") else head
+            note = ""
+            if "—" in head:
+                note = head.split("—", 1)[1].strip()
+            cur = {"version": ver, "note": note, "sections": {}}
+            releases.append(cur)
+            section = None
+        elif line.startswith("### ") and cur is not None:
+            section = line[4:].strip()
+            cur["sections"].setdefault(section, [])
+        elif line.startswith("- ") and cur is not None and section:
+            cur["sections"][section].append(line[2:].strip())
+        elif line.startswith("  ") and cur is not None and section \
+                and cur["sections"][section]:
+            # continuation of a wrapped bullet
+            cur["sections"][section][-1] += " " + line.strip()
+    return releases
+
+
+@app.route("/api/changelog")
+def changelog():
+    releases = _parse_changelog()
+    seen = db.get_meta("changelog_seen", "")
+    versions = [r["version"] for r in releases if r["version"] != "Unreleased"]
+    unread = 0
+    if seen in versions:
+        unread = versions.index(seen)          # entries newer than what you read
+    elif not seen:
+        unread = 1 if VERSION in versions else 0
+    return jsonify({"releases": releases, "current": VERSION,
+                    "seen": seen, "unread": unread})
+
+
+@app.route("/api/changelog/seen", methods=["POST"])
+def changelog_seen():
+    db.set_meta("changelog_seen", VERSION)
+    return jsonify({"ok": True, "seen": VERSION})
+
+
 # -- danger zone --
 @app.route("/api/reset", methods=["POST"])
 def reset():

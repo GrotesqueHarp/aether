@@ -218,6 +218,18 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 .layer.done{animation:shaftpulse 5.5s ease-in-out infinite;animation-delay:calc(var(--i,0) * -0.34s)}
 canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 3px}
 
+.cl-dot{width:7px;height:7px;border-radius:50%;background:var(--warn);margin-left:7px;display:inline-block}
+.clrel.cur{border-color:var(--aether)}
+.clhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.clhead h3{font-size:17px}
+.clsec{margin-top:9px}
+.clsec-h{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.clsec-h.added{color:var(--online)} .clsec-h.fixed{color:var(--warn)}
+.clsec-h.changed{color:var(--aether)} .clsec-h.removed{color:var(--danger)}
+.clrel ul{margin:0;padding-left:18px}
+.clrel li{font-size:13.5px;line-height:1.55;margin-bottom:4px;color:var(--text)}
+.clrel code{font-family:var(--mono);font-size:12px;background:#0c1220;padding:1px 5px;border-radius:4px}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -322,6 +334,7 @@ body.dashmode .main{padding:0}
     <div class="navitem" data-view="nest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>The Nest</div>
     <div class="navitem" data-view="bastion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 21V9l4-3 4 3 4-3 4 3v12"/><path d="M4 21h16M10 21v-5h4v5"/></svg>Bastion</div>
     <div class="navitem" data-view="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</div>
+    <div class="navitem" data-view="changelog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg>Changelog<span id="cl-dot" class="cl-dot" hidden></span></div>
     <div class="navitem" onclick="toggleDash()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Dashboard</div>
     <div class="foot muted">
       <div><span class="dot"></span>Anchor online</div>
@@ -376,6 +389,7 @@ async function pollState(){
     const oldBits=state.res.bits||0;
     state.res=st.resources||{};state.rates=st.rates||{};state.net=st;
     renderResBar();
+  checkChangelog();
     if((state.res.bits||0)>oldBits+0.05){
       const el=document.querySelector('[data-res="bits"]');
       if(el){el.classList.add('bump');setTimeout(()=>el.classList.remove('bump'),600);}
@@ -408,6 +422,7 @@ async function redrawView(){
     else if(state.view==='bastion'){ await bastionView(); }
     else if(state.view==='pulse'){ await pulseView(); }
     else if(state.view==='dash'){ await dashView(); }
+    else if(state.view==='changelog'){ /* static; no redraw needed */ }
   }catch(e){ /* transient failure: the next check will catch up */ }
   window.scrollTo(0,y);
   state.refreshing=false;
@@ -481,7 +496,7 @@ async function boot(){
   go('scan');
 }
 function setActive(v){document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===v));}
-function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView}[v]||scanView)();}
+function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView}[v]||scanView)();}
 
 /* -- first run: hatch the Anchor egg -- */
 function bootstrapView(){
@@ -1029,6 +1044,46 @@ function confirmSell(d){
 }
 
 
+
+/* -- changelog: what changed, and whether you've read it -- */
+function clInline(t){
+  // the changelog is written as markdown; render the two bits of it we use
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+          .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+          .replace(/`(.+?)`/g,'<code>$1</code>')
+          .replace(/\[(.+?)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+async function changelogView(){
+  $('#main').innerHTML=`<div class="topbar"><div><div class="eyebrow">What changed</div><h1>Changelog</h1></div></div><div id="cl"><div class="spin"></div></div>`;
+  const d=await api('/api/changelog');
+  const cur=d.current;
+  $('#cl').innerHTML=d.releases.map((r,i)=>{
+    const isCur=r.version===cur;
+    const isNew=i<d.unread && r.version!=='Unreleased';
+    return `<div class="card clrel ${isCur?'cur':''}" style="padding:16px 18px;margin-bottom:12px">
+      <div class="clhead">
+        <h3>${r.version==='Unreleased'?'Unreleased':'v'+r.version}</h3>
+        ${isCur?'<span class="chip online-chip">running now</span>':''}
+        ${isNew?'<span class="chip" style="color:var(--warn);border-color:var(--warn)">new to you</span>':''}
+        ${r.note?`<span class="mono muted" style="font-size:11px">${clInline(r.note)}</span>`:''}
+      </div>
+      ${Object.entries(r.sections).map(([sec,items])=>`
+        <div class="clsec"><div class="clsec-h ${sec.toLowerCase()}">${sec}</div>
+        <ul>${items.map(i=>`<li>${clInline(i)}</li>`).join('')}</ul></div>`).join('')}
+    </div>`;}).join('');
+  // opening it counts as reading it
+  await api('/api/changelog/seen',{method:'POST',body:JSON.stringify({})});
+  const dot=$('#cl-dot'); if(dot) dot.hidden=true;
+}
+
+async function checkChangelog(){
+  try{
+    const d=await api('/api/changelog');
+    const dot=$('#cl-dot');
+    if(dot) dot.hidden = !(d.unread>0);
+  }catch(e){}
+}
 
 /* ================= DASHBOARD =================
    AETHER on a spare monitor. No chrome, no controls, nothing to click —

@@ -223,6 +223,21 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Changelog
+
+Release notes live in [CHANGELOG.md](CHANGELOG.md), following
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Entries are grouped
+Added / Changed / Fixed / Removed, and any release that migrates the database
+is marked **Schema vN**.
+
+You can read it in-app too — **Changelog** in the sidebar, backed by
+`GET /api/changelog`. The sidebar shows a dot when the running version has
+notes you haven't read; opening the view clears it. `./update.sh` also prints
+everything that changed between your old version and the new one.
+
+**Contributing?** Add your entry under `## [Unreleased]` in the appropriate
+group. Move it into a versioned heading when you bump `VERSION`.
+
 ## Dashboard mode (v0.10.2)
 
 AETHER on a spare monitor. Press **D** anywhere, click Dashboard in the
