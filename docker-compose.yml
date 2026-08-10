@@ -19,8 +19,7 @@ services:
       # World-clock tuning (seconds) — uncomment to speed up for testing:
       # AETHER_TICK: "5"
       # AETHER_FIGHT_EVERY: "20"
-      # AETHER_PRESENCE_EVERY: "30"
-      # AETHER_PRESENCE_GRACE: "60"
+      # AETHER_ECON_MULT: "50"
     volumes:
       - aether_data:/data
 

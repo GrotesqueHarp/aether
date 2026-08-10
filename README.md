@@ -10,6 +10,49 @@ You raise **daemons** (unix pun fully intended) in **the Nest**, train their
 stats, and send them to auto-battle through rifts. You never pick moves — you
 raised them, now you watch them fight.
 
+## Get it
+
+```bash
+git clone https://github.com/GrotesqueHarp/aether.git
+cd aether
+```
+
+**Requirements:** Docker with the Compose plugin, *or* Python 3.9+. Nothing
+else — the Python dependencies are vendored in `./vendor` (pure Python, x86 and
+ARM), so there is no pip step, no virtualenv, and no network access needed to
+install.
+
+Fastest path, if you have Docker:
+
+```bash
+docker compose up -d --build
+# open http://<host-ip>:8787 from any device on your LAN
+```
+
+Without Docker (Debian/Ubuntu, a Proxmox LXC, a Pi, a VM):
+
+```bash
+./install.sh          # checks for python3 / ping / ip — no pip, no venv
+python3 app.py        # http://<host-ip>:8787
+```
+
+That's the whole install. Your save lives in the `aether_data` Docker volume
+(or `./aether.db` for a bare install) and is never touched by updates.
+
+> **A note if you fork this:** `aether.db` is gitignored on purpose — it
+> contains the real MAC addresses of everything on your network. Don't commit
+> it. The `vendor/` directory *is* committed intentionally, so a clone works
+> with no package manager.
+
+### Playing without LAN visibility
+
+Real devices make the most characterful worlds, but they are not required. The
+Array resolves rifts out of open subspace once your real devices run out, so
+Docker Desktop users, VPS installs, and anyone on a locked-down network get the
+full game — just with synthesised rifts instead of your printer. You can also
+add any MAC by hand ("Add device" in the UI) and it generates its world
+identically.
+
 ## Run it
 
 Python dependencies are **bundled** in `./vendor` (pure Python — x86 and ARM
@@ -41,9 +84,10 @@ ARP table, and the UI binds straight to host port 8787 with no mapping. Game
 state persists in the `aether_data` volume, so upgrades keep your daemons.
 
 On Docker Desktop (macOS/Windows) host networking can't reach the LAN — use
-the bridged fallback commented at the bottom of `docker-compose.yml`: the game
-runs fine, you add devices manually by MAC, and a huge
-`AETHER_PRESENCE_GRACE` keeps those rifts from going dormant.
+the bridged fallback commented at the bottom of `docker-compose.yml`. The game
+is fully playable that way: rifts never go dormant (presence tracking was
+removed in v0.9), and the Array fills your capacity with deep-signal rifts
+regardless of what it can see on the network.
 
 ### Updating
 
