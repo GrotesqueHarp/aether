@@ -246,6 +246,16 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 
 .asc-rank{color:var(--warn);font-size:13px;letter-spacing:1px;margin-left:4px}
 
+.gly{padding:13px 15px}
+.gly-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.gly-qs{display:flex;flex-direction:column;gap:5px}
+.gq{font-size:11.5px;text-align:left;padding:5px 9px}
+.gq.poor{opacity:.35}
+.gly-own{padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.gly-own select{background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:6px;padding:5px;font-size:11.5px}
+.worn{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.wglyph{font-family:var(--mono);font-size:10px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:2px 8px}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -920,7 +930,9 @@ async function bastionView(){
     }
     html+=`</div>`;
   }
+  html+=`<div class="section-title">Glyphs</div><div id="glyphs"><div class="spin"></div></div>`;
   $('#main').innerHTML=html;
+  renderGlyphs();
   $('#main').querySelectorAll('[data-upgrade]').forEach(btn=>btn.onclick=async()=>{
     const res=await api('/api/bastion/upgrade',{method:'POST',body:JSON.stringify({key:btn.dataset.upgrade})});
     if(!res.ok){toast(res.reason==='cant_afford'?'Not enough resources':'Cannot upgrade');return;}
@@ -936,6 +948,58 @@ async function bastionView(){
     const res=await api('/api/bastion/withdraw',{method:'POST',body:JSON.stringify({daemon_id:+btn.dataset.withdraw})});
     if(res.error){toast(res.error);return;}
     toast('Withdrawn from training');bastionView();
+  });
+}
+
+/* -- glyphs: craftable equipment -- */
+async function renderGlyphs(){
+  const host=$('#glyphs'); if(!host)return;
+  const g=await api('/api/glyphs');
+  const res=g.resources||{};
+  const afford=c=>Object.entries(c).every(([k,v])=>(res[k]||0)>=v);
+  const costStr=c=>Object.entries(c).map(([k,v])=>`${fmt(v)} ${k.replace('essence.','')}`).join(' + ');
+
+  const bench=g.catalogue.map(c=>`
+    <div class="card gly">
+      <div class="gly-h"><b>${c.name}</b><span class="mono muted" style="font-size:10.5px">${c.essence}</span></div>
+      <div class="gly-qs">${c.qualities.map(q=>`
+        <button class="btn ghost gq ${afford(q.cost)?'':'poor'}" data-craft="${c.kind}" data-q="${q.quality}"
+          title="${costStr(q.cost)}">Q${q.quality} · ${q.desc}</button>`).join('')}</div>
+    </div>`).join('');
+
+  const free=g.owned.filter(x=>!x.daemon_id), worn=g.owned.filter(x=>x.daemon_id);
+  const roster=(state.roster||[]);
+  const inv=g.owned.length?`
+    <div class="section-title" style="margin-top:14px">Struck glyphs</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">
+      ${g.owned.map(x=>`<div class="card gly-own">
+        <div><b>${x.name}</b> <span class="mono muted">Q${x.quality}</span></div>
+        <div class="mono" style="color:var(--online);font-size:11.5px">${x.desc}</div>
+        <select data-equip="${x.id}">
+          <option value="">${x.holder?'worn by '+x.holder:'unequipped'}</option>
+          ${x.daemon_id?'<option value="0">— take it off —</option>':''}
+          ${roster.filter(d=>d.id!==x.daemon_id).map(d=>`<option value="${d.id}">give to ${d.name} (${(d.equipped||[]).length}/${d.glyph_slots})</option>`).join('')}
+        </select></div>`).join('')}
+    </div>`:'';
+
+  host.innerHTML=`<div class="muted" style="font-size:13px;margin-bottom:10px">
+      Ascension makes a daemon flatly stronger; glyphs decide what it's <i>for</i>.
+      Quality is paid for, never rolled. ${free.length} unworn · ${worn.length} in use.</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${bench}</div>${inv}`;
+
+  host.querySelectorAll('[data-craft]').forEach(b=>b.onclick=async()=>{
+    const r=await api('/api/glyphs/craft',{method:'POST',
+      body:JSON.stringify({kind:b.dataset.craft,quality:+b.dataset.q})});
+    if(r.error){toast(r.error==='cant_afford'?'Not enough to strike that':r.error);return;}
+    toast(`Struck: ${r.desc}`); pollState(); renderGlyphs();
+  });
+  host.querySelectorAll('[data-equip]').forEach(sel=>sel.onchange=async()=>{
+    if(sel.value==='')return;
+    const r=await api('/api/glyphs/equip',{method:'POST',
+      body:JSON.stringify({glyph_id:+sel.dataset.equip,daemon_id:+sel.value})});
+    if(r.error){toast(r.message||r.error);return;}
+    toast(r.equipped?'Glyph fitted':'Glyph removed');
+    await refreshRoster(); renderGlyphs();
   });
 }
 
@@ -1793,6 +1857,7 @@ function daemonCard(d){
       <button class="btn ghost" data-train="def" data-id="${d.id}">+DEF</button>
       <button class="btn ghost" data-train="spd" data-id="${d.id}">+SPD</button>
     </div>`}
+    ${(d.equipped&&d.equipped.length)?`<div class="worn">${d.equipped.map(x=>`<span class="wglyph" title="${x.kind} Q${x.quality}">${x.kind} Q${x.quality}</span>`).join('')}<span class="mono muted" style="font-size:10px">${d.equipped.length}/${d.glyph_slots} slots</span></div>`:''}
     ${(evo||asc)?`<div class="actions">${evo}${asc}</div>`:''}
   </div>`;
 }

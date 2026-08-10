@@ -35,6 +35,7 @@ except ModuleNotFoundError:
 
 from core import db, scan, ticker, economy, bastion, war
 from core import daemon as daemon_mod
+from core import glyph as glyph_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
 from core import world as world_mod
@@ -715,6 +716,56 @@ def hatchery_synthesize():
                  f"A new egg settles into the Hatchery, humming with "
                  f"{body['essence']} essence.")
     return jsonify(res)
+
+
+# -- glyphs --
+@app.route("/api/glyphs")
+def glyphs():
+    owned = db.list_glyphs()
+    for g in owned:
+        g["desc"] = glyph_mod.describe(g["kind"], g["quality"])
+        g["name"] = glyph_mod.GLYPHS[g["kind"]]["name"]
+        holder = db.get_daemon(g["daemon_id"]) if g["daemon_id"] else None
+        g["holder"] = holder.name if holder else None
+    return jsonify({"owned": owned, "catalogue": glyph_mod.catalogue(),
+                    "resources": db.res_all()})
+
+
+@app.route("/api/glyphs/craft", methods=["POST"])
+def glyph_craft():
+    b = request.get_json(force=True)
+    kind, quality = b.get("kind", ""), int(b.get("quality", 1))
+    if kind not in glyph_mod.GLYPHS or not 1 <= quality <= glyph_mod.MAX_QUALITY:
+        return jsonify({"error": "bad_glyph"}), 400
+    cost = glyph_mod.craft_cost(kind, quality)
+    if not db.res_spend(cost):
+        return jsonify({"error": "cant_afford", "cost": cost}), 400
+    gid = db.add_glyph(kind, quality)
+    db.add_event("glyph", f"A {glyph_mod.GLYPHS[kind]['name']} of quality "
+                          f"{quality} was struck in the Crucible.")
+    return jsonify({"ok": True, "id": gid, "cost": cost,
+                    "desc": glyph_mod.describe(kind, quality)})
+
+
+@app.route("/api/glyphs/equip", methods=["POST"])
+def glyph_equip():
+    b = request.get_json(force=True)
+    gid = int(b.get("glyph_id", -1))
+    did = b.get("daemon_id")
+    if did in (None, "", 0):                       # unequip
+        db.set_glyph_owner(gid, None)
+        return jsonify({"ok": True, "equipped": False})
+    d = db.get_daemon(int(did))
+    if not d:
+        return jsonify({"error": "no_daemon"}), 404
+    if len(db.list_glyphs(d.id)) >= glyph_mod.slots_for(d):
+        return jsonify({"error": "no_slots",
+                        "message": f"{d.name} has no free glyph slot. Evolve or "
+                                   "ascend it, or unequip something."}), 400
+    if not db.set_glyph_owner(gid, d.id):
+        return jsonify({"error": "no_glyph"}), 404
+    return jsonify({"ok": True, "equipped": True,
+                    "daemon": _daemon_payload(db.get_daemon(d.id))})
 
 
 # -- records & homecoming --

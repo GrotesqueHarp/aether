@@ -223,6 +223,28 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Glyphs (v0.12.1)
+
+The second prestige loop, and the horizontal one. Seven kinds of craftable
+equipment — ATK, DEF, HP, SPD, plus harvest yield, XP gain and training-hall
+rate — at quality 1 to 5. Quality is chosen and paid for, never rolled; this
+game doesn't ask you to gamble or to show up at the right moment.
+
+Ascension makes a daemon flatly stronger. Glyphs decide what it's *for*: a
+Harvest glyph is worthless in a fight and a Forge glyph is worthless on a
+shelf, so your roster becomes a set of jobs rather than a power ranking.
+
+Slots come from what a daemon has been through, not what you buy — 1 at
+Hatchling, 2 at Champion, 3 at Mega, and one more at ascension ranks 3 and 6.
+Cost scales roughly q^1.9 and demands Aethercite from Q3, which finally gives
+Aethercite a second sink alongside the Array.
+
+Struck at the Bastion. Knobs: `AETHER_GLYPH_CORES`, `AETHER_GLYPH_ESSENCE`,
+`AETHER_GLYPH_BITS`.
+
+> Called Glyphs rather than Sigils because `sigil` already means the
+> procedurally drawn emblem in every daemon's genome.
+
 ## Ascension (v0.12)
 
 The first prestige loop. A daemon that reaches **Mega at level 60** can be

@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -103,6 +103,14 @@ def _migrate_7_to_8(c: sqlite3.Connection):
     retroactively."""
 
 
+def _migrate_8_to_9(c: sqlite3.Connection):
+    """v0.11 -> v0.12: the sigils table (created by init_db)."""
+
+
+def _migrate_8_to_9(c: sqlite3.Connection):
+    """v0.11 -> v0.12.1: the glyphs table (created by init_db)."""
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
@@ -111,7 +119,9 @@ MIGRATIONS = {
     5: _migrate_5_to_6,
     6: _migrate_6_to_7,
     7: _migrate_7_to_8,
-    # 8: _migrate_8_to_9,   <- next schema change goes here
+    8: _migrate_8_to_9,
+    8: _migrate_8_to_9,
+    # 9: _migrate_9_to_10,  <- next schema change goes here
 }
 
 
@@ -192,6 +202,21 @@ def init_db():
                 essence TEXT NOT NULL,
                 state TEXT NOT NULL DEFAULT 'incubating'
             );
+            CREATE TABLE IF NOT EXISTS sigils (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                tier INTEGER NOT NULL DEFAULT 1,
+                magnitude REAL NOT NULL DEFAULT 0,
+                equipped_to INTEGER,
+                created REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS glyphs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                quality INTEGER NOT NULL,
+                daemon_id INTEGER,
+                created REAL NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS history (
                 ts REAL PRIMARY KEY,
                 bits REAL NOT NULL DEFAULT 0,
@@ -267,6 +292,20 @@ def save_daemon(d: Daemon):
                   (json.dumps(d.to_dict()), d.id))
 
 
+def _attach_mods(d: Daemon):
+    """Hang anything stored outside the daemon's JSON blob onto the object.
+
+    Equipped glyphs live in their own table so they can exist unequipped, be
+    moved between daemons, and survive the daemon being ascended. They're
+    attached as a plain attribute rather than a dataclass field so `asdict`
+    never writes them back into the blob and duplicates the source of truth.
+    """
+    try:
+        d.equipped = list_glyphs(d.id) if d.id else []
+    except Exception:
+        d.equipped = []
+
+
 def get_daemon(did: int) -> Optional[Daemon]:
     with _conn() as c:
         row = c.execute("SELECT * FROM daemons WHERE id = ?", (did,)).fetchone()
@@ -274,6 +313,7 @@ def get_daemon(did: int) -> Optional[Daemon]:
         return None
     d = Daemon.from_dict(json.loads(row["data"]))
     d.id = row["id"]
+    _attach_mods(d)
     return d
 
 
@@ -284,6 +324,7 @@ def list_daemons() -> list[Daemon]:
     for row in rows:
         d = Daemon.from_dict(json.loads(row["data"]))
         d.id = row["id"]
+        _attach_mods(d)
         out.append(d)
     return out
 
@@ -646,6 +687,84 @@ def set_found_at(mac: str, level: int):
         c.execute("UPDATE devices SET found_at = ? WHERE mac = ?", (level, mac))
 
 
+# --- sigils -----------------------------------------------------------------
+def add_sigil(kind: str, tier: int, magnitude: float) -> int:
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO sigils (kind, tier, magnitude, created) VALUES (?,?,?,?)",
+            (kind, tier, magnitude, time.time()))
+        return cur.lastrowid
+
+
+def get_sigil(sid: int) -> Optional[dict]:
+    with _conn() as c:
+        row = c.execute("SELECT * FROM sigils WHERE id = ?", (sid,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_sigils(equipped_to: Optional[int] = "any") -> list[dict]:
+    q, args = "SELECT * FROM sigils", ()
+    if equipped_to == "any":
+        pass
+    elif equipped_to is None:
+        q += " WHERE equipped_to IS NULL"
+    else:
+        q += " WHERE equipped_to = ?"; args = (equipped_to,)
+    with _conn() as c:
+        rows = c.execute(q + " ORDER BY tier DESC, id", args).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_sigil_owner(sid: int, daemon_id: Optional[int]):
+    with _conn() as c:
+        c.execute("UPDATE sigils SET equipped_to = ? WHERE id = ?", (daemon_id, sid))
+
+
+def delete_sigil(sid: int):
+    with _conn() as c:
+        c.execute("DELETE FROM sigils WHERE id = ?", (sid,))
+
+
+def unequip_all(daemon_id: int):
+    with _conn() as c:
+        c.execute("UPDATE sigils SET equipped_to = NULL WHERE equipped_to = ?",
+                  (daemon_id,))
+
+
+# --- glyphs -----------------------------------------------------------------
+def add_glyph(kind: str, quality: int) -> int:
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO glyphs (kind, quality, created) VALUES (?, ?, ?)",
+            (kind, int(quality), time.time()))
+        return cur.lastrowid
+
+
+def list_glyphs(daemon_id: Optional[int] = "any") -> list[dict]:
+    q, args = "SELECT * FROM glyphs", ()
+    if daemon_id != "any":
+        if daemon_id is None:
+            q += " WHERE daemon_id IS NULL"
+        else:
+            q += " WHERE daemon_id = ?"; args = (daemon_id,)
+    with _conn() as c:
+        rows = c.execute(q + " ORDER BY quality DESC, id", args).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_glyph_owner(glyph_id: int, daemon_id: Optional[int]) -> bool:
+    with _conn() as c:
+        cur = c.execute("UPDATE glyphs SET daemon_id = ? WHERE id = ?",
+                        (daemon_id, glyph_id))
+        return cur.rowcount > 0
+
+
+def unequip_all(daemon_id: int):
+    with _conn() as c:
+        c.execute("UPDATE glyphs SET daemon_id = NULL WHERE daemon_id = ?",
+                  (daemon_id,))
+
+
 # --- history ----------------------------------------------------------------
 HISTORY_KEEP_DAYS = 400
 
@@ -681,7 +800,7 @@ def last_history() -> Optional[dict]:
 # Everything the game accumulates, in the order it's safe to clear.
 RESETTABLE = ["daemons", "rift_progress", "events", "expeditions", "resources",
               "harvests", "eggs", "facilities", "training", "incursions",
-              "history"]
+              "history", "sigils"]
 
 
 def reset_rifts() -> dict:

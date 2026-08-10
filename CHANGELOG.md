@@ -20,6 +20,29 @@ back.
 - Traits, squad synergies, expedition orders, milestones, creature behaviours,
   and the shaft in cross-section.
 
+## [0.12.1] — Schema v9
+
+### Added
+- **Glyphs**, the second prestige system: craftable equipment in seven kinds —
+  ATK / DEF / HP / SPD, plus harvest yield, XP gain and training-hall rate.
+  Quality 1–5 is chosen and paid for, never rolled, with cost scaling ~q^1.9
+  and Aethercite required from Q3, giving it a second sink.
+- Slots come from what a daemon has been through rather than what you buy:
+  1 at Hatchling, 2 at Champion, 3 at Mega, +1 at ascension ranks 3 and 6.
+- Where Ascension makes a daemon flatly stronger, glyphs decide what it's *for*
+  — a Harvest glyph is worthless in a fight and a Forge glyph is worthless on a
+  shelf, so a roster becomes a set of jobs rather than a power ranking.
+
+### Fixed
+- `db.get_daemon()` called an undefined `_attach_mods()`, raising `NameError`
+  on **every** daemon fetch. Now defined as the hook that attaches equipped
+  glyphs, and applied to `list_daemons()` too.
+
+### Changed
+- Equipment is called Glyphs, not Sigils: `sigil` already names the procedural
+  emblem in every daemon's genome, and overloading it would have made the code
+  ambiguous.
+
 ## [0.12.0]
 
 ### Added

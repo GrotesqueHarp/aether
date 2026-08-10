@@ -53,6 +53,8 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     mult = (ECON_MULT * (DORMANT_RATE_MULT if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
 
+    from . import glyph
+    mult *= 1.0 + glyph.bonus(getattr(daemon, "equipped", []), "harvest")
     bits_hr = (6.0 + depth_factor * 3.2) * power_factor * mult
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
     out = {"bits": bits_hr, f"essence.{essence_kind}": bits_hr / 10.0}

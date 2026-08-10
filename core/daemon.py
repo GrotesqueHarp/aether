@@ -89,6 +89,12 @@ class Daemon:
     ascensions: int = 0         # lineage rank — see ascend()
     id: Optional[int] = None    # set by the DB layer
 
+    def __post_init__(self):
+        # populated by the DB layer from the glyphs table; deliberately not a
+        # dataclass field, so it never round-trips into the stored blob
+        if not hasattr(self, "equipped"):
+            self.equipped = []
+
     # ---- derived battle stats ------------------------------------------------
     def stat(self, key: str) -> int:
         base = self.base_stats[key]
@@ -101,6 +107,9 @@ class Daemon:
         # multiplicative channel of your own the curve eventually outruns you
         # no matter how long you grind. Ascension is that channel.
         val *= ASCEND_STAT_MULT ** self.ascensions
+        # equipped glyphs: horizontal choice on top of vertical growth
+        from . import glyph
+        val *= 1.0 + glyph.stat_bonus(getattr(self, "equipped", []), key)
         # care modifiers
         if key == "spd":
             val *= 1.0 - min(self.care["weight"], 90) / 300.0      # heavy = slow
@@ -153,6 +162,9 @@ class Daemon:
     # ---- progression ---------------------------------------------------------
     def gain_xp(self, amount: int) -> dict:
         """Returns a small event dict describing what happened."""
+        from . import glyph
+        amount = int(amount * (1.0 + glyph.bonus(
+            getattr(self, "equipped", []), "xp")))
         events = {"xp": amount, "levels": 0, "evolved_to": None}
         self.xp += amount
         while self.xp >= self.xp_to_next():
@@ -256,6 +268,9 @@ class Daemon:
         d["can_ascend"] = self.can_ascend()
         d["ascend_cost"] = self.ascend_cost()
         d["ascend_level"] = ASCEND_LEVEL
+        from . import glyph
+        d["equipped"] = getattr(self, "equipped", [])
+        d["glyph_slots"] = glyph.slots_for(self)
         d["color"] = content.ELEMENT_COLORS.get(self.element, "#8B7CF6")
         return d
 
