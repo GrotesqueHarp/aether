@@ -218,6 +218,38 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 .layer.done{animation:shaftpulse 5.5s ease-in-out infinite;animation-delay:calc(var(--i,0) * -0.34s)}
 canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 3px}
 
+/* ---- dashboard ---- */
+body.dashmode nav.rail, body.dashmode .resbar{display:none}
+/* the shell is a 216px rail + content grid; hiding the rail leaves its track
+   behind and squeezes the board into a column, so collapse the grid too */
+body.dashmode .app{grid-template-columns:1fr}
+body.dashmode .main{max-width:none;width:100%}
+body.dashmode .main{padding:0}
+.dash{padding:30px 40px;min-height:100vh}
+.dash-head{display:flex;align-items:baseline;gap:18px;margin-bottom:22px}
+.dash-title{font-family:var(--display);font-size:34px;letter-spacing:.22em;color:var(--aether)}
+.dash-sub{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.dtiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px}
+.dtile{padding:14px 18px;border:1px solid var(--hair);border-radius:12px;background:rgba(22,30,46,.55)}
+.dtile .dlabel{font-family:var(--mono);font-size:11px;letter-spacing:.14em}
+.dtile .dval{font-size:34px;font-weight:700;line-height:1.15}
+.dtile .drate{font-family:var(--mono);font-size:12px;color:var(--online)}
+.dash-tank{height:300px;margin-bottom:20px}
+.dash-cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-bottom:20px}
+.dash-h{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase;margin-bottom:10px}
+.drift{margin-bottom:11px}
+.dr-name{font-size:16px;font-weight:600}
+.dr-bar{height:7px;background:#0c1220;border-radius:4px;overflow:hidden;margin:4px 0 3px}
+.dr-bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--aether-dim),var(--aether))}
+.dr-meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.dalert{font-size:15px;padding:7px 12px;border-radius:8px;margin-bottom:7px;border-left:3px solid}
+.dalert.good{border-color:var(--online);background:rgba(63,208,138,.07)}
+.dalert.warn{border-color:var(--warn);background:rgba(232,200,77,.07)}
+.dalert.bad{border-color:var(--danger);background:rgba(240,113,74,.08)}
+.dfeed-row{font-size:14px;padding:5px 0;border-top:1px solid var(--hair);color:var(--muted)}
+.dfeed-k{font-family:var(--mono);font-size:10.5px;color:var(--aether);letter-spacing:.08em;margin-right:10px;text-transform:uppercase}
+.dash-foot{margin-top:22px;font-family:var(--mono);font-size:11px;color:var(--dim);opacity:.6}
+
 /* ---- the shaft ---- */
 .depthbar{position:relative;height:10px;background:#0c1220;border:1px solid var(--hair);border-radius:6px;margin:4px 0 8px;overflow:visible}
 .depthbar>i{display:block;height:100%;border-radius:5px;
@@ -290,6 +322,7 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
     <div class="navitem" data-view="nest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>The Nest</div>
     <div class="navitem" data-view="bastion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 21V9l4-3 4 3 4-3 4 3v12"/><path d="M4 21h16M10 21v-5h4v5"/></svg>Bastion</div>
     <div class="navitem" data-view="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</div>
+    <div class="navitem" onclick="toggleDash()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Dashboard</div>
     <div class="foot muted">
       <div><span class="dot"></span>Anchor online</div>
       <div class="mono" id="foot-net"></div>
@@ -374,6 +407,7 @@ async function redrawView(){
     else if(state.view==='nest'){ await nestView(); }
     else if(state.view==='bastion'){ await bastionView(); }
     else if(state.view==='pulse'){ await pulseView(); }
+    else if(state.view==='dash'){ await dashView(); }
   }catch(e){ /* transient failure: the next check will catch up */ }
   window.scrollTo(0,y);
   state.refreshing=false;
@@ -447,7 +481,7 @@ async function boot(){
   go('scan');
 }
 function setActive(v){document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===v));}
-function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView}[v]||scanView)();}
+function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView}[v]||scanView)();}
 
 /* -- first run: hatch the Anchor egg -- */
 function bootstrapView(){
@@ -995,6 +1029,131 @@ function confirmSell(d){
 }
 
 
+
+/* ================= DASHBOARD =================
+   AETHER on a spare monitor. No chrome, no controls, nothing to click —
+   numbers large enough to read across a room, the Tank running underneath,
+   and anything that actually wants you surfaced as an alert.
+
+   Open it directly at /#dash so a TV or Pi kiosk can boot straight into it,
+   toggle with D, leave with Escape. */
+
+function dashAlerts(){
+  const out = [];
+  for(const d of (state.roster||[])){
+    const c = d.care || {};
+    if((c.hunger ?? 100) < 25)      out.push({t:'warn', s:`${d.name} is hungry`});
+    else if((c.energy ?? 100) < 20) out.push({t:'warn', s:`${d.name} is exhausted`});
+    if((c.corruption ?? 0) > 55)    out.push({t:'bad',  s:`${d.name} is corrupting`});
+    if(d.can_evolve)                out.push({t:'good', s:`${d.name} can evolve`});
+  }
+  for(const dev of (state.devices||[])){
+    const r = dev.rift; if(!r) continue;
+    if(r.incursion) out.push({t:'bad',
+      s:`NULL incursion at ${r.world_name} — ${Math.ceil(r.incursion.seconds_left/3600)}h`});
+    if(r.captures_available > 0) out.push({t:'good',
+      s:`${r.captures_available} daemon(s) ready to draw at ${r.world_name}`});
+    if(r.fully_cleared) out.push({t:'good', s:`${r.world_name} is fully dug — Overclock ready`});
+  }
+  const idle = (state.roster||[]).filter(d => !d.on_expedition && !d.harvesting && !d.training);
+  if(idle.length) out.push({t:'warn', s:`${idle.length} daemon(s) idle — no post, no hall`});
+  return out;
+}
+
+async function dashView(){
+  document.body.classList.add('dashmode');
+  await refreshRoster();
+  try{
+    const known = await api('/api/devices');
+    state.devices = known.devices || [];
+    await hydrateRifts();
+  }catch(e){}
+
+  const res = state.res || {}, rates = state.rates || {};
+  const tile = (label, val, rate, col) => `
+    <div class="dtile">
+      <div class="dlabel" style="color:${col}">${label}</div>
+      <div class="dval">${fmt(val||0)}</div>
+      ${rate ? `<div class="drate">+${fmt(rate)}/h</div>` : '<div class="drate">&nbsp;</div>'}
+    </div>`;
+
+  const essences = Object.keys(res).filter(k => k.startsWith('essence.') && res[k] >= 1)
+    .sort((a,b) => res[b]-res[a]).slice(0,4);
+
+  const rifts = (state.devices||[]).filter(d=>d.rift).map(d=>{
+    const r = d.rift, pct = Math.round(100*r.progress.cleared/(r.layers||100));
+    return `<div class="drift">
+      <div class="dr-name">${r.world_name}${r.progress.tier?` <span class="tier-chip">T${r.progress.tier}</span>`:''}</div>
+      <div class="dr-bar"><i style="width:${pct}%"></i></div>
+      <div class="dr-meta">layer ${r.progress.cleared}/${r.layers||100}${r.incursion?' · <span style="color:var(--danger)">NULL</span>':''}</div>
+    </div>`;}).join('');
+
+  const alerts = dashAlerts();
+  const feed = (state.dashEvents||[]).slice(0,7).map(e =>
+    `<div class="dfeed-row"><span class="dfeed-k">${e.kind.replace(/_/g,' ')}</span>${e.text}</div>`).join('');
+
+  $('#main').innerHTML = `
+    <div class="dash">
+      <div class="dash-head">
+        <div class="dash-title">AETHER</div>
+        <div class="dash-sub">${state.roster.length} daemons · ${(state.devices||[]).length} rifts resolved
+          · <span id="dash-clock"></span></div>
+      </div>
+      <div class="dtiles">
+        ${tile('BITS', res.bits, rates.bits, '#DCE3EE')}
+        ${tile('CORES', res.cores, rates.cores, '#E8C84D')}
+        ${res.aethercite ? tile('AETHERCITE', res.aethercite, 0, '#7FCBEB') : ''}
+        ${essences.map(k => tile(k.split('.')[1].toUpperCase(), res[k], rates[k],
+                                 ESS_COLORS[k.split('.')[1]] || '#8B7CF6')).join('')}
+      </div>
+      <canvas id="tank" class="tank dash-tank"></canvas>
+      <div class="dash-cols">
+        <div><div class="dash-h">Rifts</div><div class="drifts">${rifts || '<div class="muted">none resolved</div>'}</div></div>
+        <div><div class="dash-h">Needs you</div>
+          <div class="dalerts">${alerts.length ? alerts.map(a =>
+            `<div class="dalert ${a.t}">${a.s}</div>`).join('') :
+            '<div class="dalert good">everything is running itself</div>'}</div></div>
+      </div>
+      <div class="dash-h">The Pulse</div>
+      <div class="dfeed">${feed || '<div class="muted">quiet</div>'}</div>
+      <div class="dash-foot">press D or Esc to leave</div>
+    </div>`;
+
+  tankMount();
+  dashClock();
+  try{
+    const j = await api('/api/journal?limit=7');
+    state.dashEvents = j.events || [];
+  }catch(e){}
+}
+
+function dashClock(){
+  const el = document.getElementById('dash-clock');
+  if(!el) return;
+  el.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  clearTimeout(state.dashClockT);
+  state.dashClockT = setTimeout(dashClock, 20000);
+}
+
+function toggleDash(){
+  if(state.view === 'dash'){
+    document.body.classList.remove('dashmode');
+    history.replaceState(null, '', location.pathname);
+    go('scan');
+  } else {
+    state.view = 'dash'; state.currentRift = null;
+    setActive('dash');
+    history.replaceState(null, '', '#dash');
+    dashView();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if(e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if(e.key === 'd' || e.key === 'D') toggleDash();
+  if(e.key === 'Escape' && state.view === 'dash') toggleDash();
+});
+
 /* ================= RIFT FLOW =================
    What a working harvest post looks like from outside: essence drawn up out of
    the layer and away to the Bastion. Density follows the post's actual yield,
@@ -1455,7 +1614,8 @@ function closeModal(){
   // behind it is out of date — pull the change through immediately
   refreshNow();
 }
-boot();
+// a kiosk can boot straight into the dashboard: open /#dash
+if(location.hash === '#dash'){ boot().then(()=>toggleDash()); } else { boot(); }
 </script>
 </body>
 </html>

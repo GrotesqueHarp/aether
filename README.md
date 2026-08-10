@@ -223,6 +223,24 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Dashboard mode (v0.10.2)
+
+AETHER on a spare monitor. Press **D** anywhere, click Dashboard in the
+sidebar, or open **`http://<host>:8787/#dash`** directly so a TV or Pi kiosk
+boots straight into it. **Esc** or **D** leaves.
+
+No chrome and nothing to click — resource totals at a size you can read across
+a room, the Tank running full width underneath, every rift's depth as a bar,
+and a **Needs you** column that surfaces anything actually wanting attention:
+hungry or corrupting daemons, daemons ready to evolve, Null incursions with
+their countdown, shelves with captures waiting, rifts fully dug and ready to
+Overclock, and daemons sitting idle with no post and no hall. When there's
+nothing to do it says so.
+
+Live updates come from the same fingerprint check as the rest of the app, so
+an idle board issues no redraws, and the Tank stops rendering when the tab is
+hidden.
+
 ## Rift ambience (v0.10.1)
 
 Rifts move now too. Three quiet layers:
