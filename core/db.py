@@ -632,6 +632,26 @@ RESETTABLE = ["daemons", "rift_progress", "events", "expeditions", "resources",
               "harvests", "eggs", "facilities", "training", "incursions"]
 
 
+def reset_rifts() -> dict:
+    """Re-roll the world, keep the player.
+
+    Clears rift depth, tiers, wards, capture counts, harvest postings,
+    expeditions and incursions — but leaves your daemons, facilities and
+    resources untouched. Useful when the world model changes under you (as it
+    did when nodes became 100-layer shafts) and you want fresh rifts without
+    starting over.
+
+    Lifetime layers dug is deliberately preserved: it's a record of what you
+    did, and the Array's gates are built on it.
+    """
+    counts = {}
+    with _conn() as c:
+        for table in ("rift_progress", "harvests", "expeditions", "incursions"):
+            counts[table] = c.execute(f"SELECT COUNT(*) n FROM {table}").fetchone()["n"]
+            c.execute(f"DELETE FROM {table}")
+    return counts
+
+
 def reset_all(keep_devices: bool = True) -> dict:
     """Wipe progression back to a clean save.
 

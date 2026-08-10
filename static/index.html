@@ -202,8 +202,15 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 
 .reset-link{margin-top:9px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--dim);cursor:pointer;opacity:.55;transition:.15s}
 .reset-link:hover{color:var(--danger);opacity:1}
+.rscope{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid var(--hair);border-radius:8px;margin-bottom:7px;cursor:pointer;font-size:12.5px;line-height:1.45}
+.rscope:hover{border-color:var(--aether-dim)}
+.rscope input{width:auto;margin:3px 0 0}
 .reset-modal input{width:100%;background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:7px;padding:9px 11px;font-family:var(--mono);font-size:13px;letter-spacing:.1em;margin:4px 0 14px}
 .reset-modal input:focus{outline:none;border-color:var(--danger)}
+
+.tank{width:100%;height:300px;display:block;border:1px solid var(--hair);border-radius:12px;
+  background:radial-gradient(120% 90% at 50% 0%, rgba(139,124,246,.10), rgba(12,18,32,.85) 70%), #0a0f1c;
+  margin-bottom:6px}
 
 /* ---- the shaft ---- */
 .depthbar{position:relative;height:10px;background:#0c1220;border:1px solid var(--hair);border-radius:6px;margin:4px 0 8px;overflow:visible}
@@ -918,11 +925,13 @@ async function nestView(){
   $('#main').innerHTML=`
     <div class="topbar"><div><div class="eyebrow">Home space</div><h1>The Nest</h1></div>
     <div class="net">${state.roster.length} daemon(s) in your care</div></div>
+    <canvas id="tank" class="tank"></canvas>
     <div class="section-title">Hatchery</div>
     <div class="card hatchery" id="hatchery"><div class="spin"></div></div>
     <div class="section-title">Your daemons</div>
     <div id="roster" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))"></div>`;
   renderHatchery();
+  tankMount();
   const host=$('#roster');
   if(!state.roster.length){host.innerHTML=`<div class="empty">No daemons yet. Scan a rift, defeat its Gatekeeper, and capture its signature daemon — or your Anchor egg is waiting on first run.</div>`;return;}
   host.innerHTML=state.roster.map(daemonCard).join('');
@@ -972,33 +981,278 @@ function confirmSell(d){
   };
 }
 
+/* ================= THE TANK =================
+   The Nest, as something to watch rather than read.
+
+   Every creature is drawn from its own genome — element sets the palette,
+   stage the size, rarity the finnage and glow — so a daemon looks like itself
+   and like its sigil. Nothing here is an asset file; it's all maths.
+
+   Motion carries the care meters, which is the point: you should be able to
+   tell the Nest needs you without reading a single bar. Hungry daemons sink
+   and slow, tired ones drift, unhappy ones keep to themselves, corrupted ones
+   flicker with umbra static. It changes nothing mechanically — watching is
+   its own reward, not a bonus.
+
+   Positions live in state.tank keyed by daemon id, so the live-refresh
+   redrawing the Nest doesn't teleport everyone back to the middle. */
+
+const TANK = { canvas:null, ctx:null, w:0, h:0, raf:null, motes:[], t:0 };
+
+function tankCreature(d){
+  const c = state.tank[d.id] || (state.tank[d.id] = {});
+  if(c.x === undefined){
+    // deterministic spawn from the daemon's own seed, so it doesn't jump
+    // around between sessions
+    const n = (d.id * 2654435761) % 1000 / 1000;
+    c.x = 0.12 + n * 0.76;
+    c.y = 0.2 + ((d.id * 40503) % 1000 / 1000) * 0.6;
+    c.vx = (n - 0.5) * 0.0012;
+    c.vy = 0;
+    c.phase = n * Math.PI * 2;
+    c.dart = 0;
+  }
+  c.d = d;
+  return c;
+}
+
+function tankSync(){
+  state.tank = state.tank || {};
+  const live = new Set(state.roster.map(d => d.id));
+  for(const id of Object.keys(state.tank)) if(!live.has(+id)) delete state.tank[id];
+  return state.roster.map(tankCreature);
+}
+
+function tankMount(){
+  const cv = document.getElementById('tank');
+  if(!cv) return;
+  TANK.canvas = cv;
+  TANK.ctx = cv.getContext('2d');
+  tankResize();
+  if(TANK.motes.length === 0){
+    for(let i=0;i<44;i++) TANK.motes.push({
+      x:Math.random(), y:Math.random(),
+      r:0.5+Math.random()*2.1, s:0.00004+Math.random()*0.00014,
+      a:0.06+Math.random()*0.16 });
+  }
+  if(!TANK.raf) TANK.raf = requestAnimationFrame(tankFrame);
+}
+
+function tankResize(){
+  const cv = TANK.canvas; if(!cv) return;
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  const rect = cv.getBoundingClientRect();
+  TANK.w = rect.width; TANK.h = rect.height;
+  cv.width = rect.width*dpr; cv.height = rect.height*dpr;
+  TANK.ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', () => { if(TANK.canvas) tankResize(); });
+
+const STAGE_SIZE = {Egg:14, Hatchling:20, Rookie:26, Champion:33, Ultimate:40, Mega:48};
+
+function tankFrame(){
+  TANK.raf = null;
+  const cv = document.getElementById('tank');
+  // the Nest was navigated away from, or the tab is hidden: stop burning cycles
+  if(!cv || document.hidden){ if(cv) TANK.raf = requestAnimationFrame(tankFrame); return; }
+  if(cv !== TANK.canvas){ TANK.canvas = cv; TANK.ctx = cv.getContext('2d'); tankResize(); }
+
+  const ctx = TANK.ctx, W = TANK.w, H = TANK.h;
+  TANK.t += 1;
+  ctx.clearRect(0,0,W,H);
+
+  // ambient drift
+  for(const m of TANK.motes){
+    m.y -= m.s * 60;
+    if(m.y < -0.02){ m.y = 1.02; m.x = Math.random(); }
+    ctx.beginPath();
+    ctx.arc(m.x*W, m.y*H, m.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(139,124,246,${m.a})`;
+    ctx.fill();
+  }
+
+  for(const c of tankSync()) tankStep(c, W, H);
+  for(const c of tankSync()) tankDraw(ctx, c, W, H);
+
+  TANK.raf = requestAnimationFrame(tankFrame);
+}
+
+function tankStep(c, W, H){
+  const d = c.d, care = d.care || {};
+  const energy = (care.energy ?? 100)/100;
+  const hunger = (care.hunger ?? 100)/100;
+  const happy  = (care.happiness ?? 100)/100;
+  const corrupt= (care.corruption ?? 0)/100;
+
+  c.phase += 0.012 + 0.02*energy;
+
+  // listless when tired or starving; lively when fed and content
+  const vigour = 0.25 + 0.75*energy*(0.4+0.6*hunger);
+  if(Math.random() < 0.004*vigour) c.dart = 26;          // occasional flick
+  const speed = (0.00045 + 0.0011*vigour) * (c.dart>0 ? 3.2 : 1);
+  if(c.dart>0) c.dart--;
+
+  // steer toward a wandering target
+  if(!c.tx || Math.random()<0.006){
+    c.tx = 0.08 + Math.random()*0.84;
+    c.ty = 0.14 + Math.random()*0.66;
+  }
+  const dx = c.tx-c.x, dy = c.ty-c.y;
+  const dist = Math.hypot(dx,dy)||1;
+  c.vx += (dx/dist)*speed*0.25;
+  c.vy += (dy/dist)*speed*0.25;
+
+  // hungry daemons sink; happy ones ride high
+  c.vy += (0.35 - hunger*0.30)*0.00022;
+  c.vy -= happy*0.00008;
+
+  // gentle personal space — clumped creatures make an unreadable pile of
+  // overlapping name labels
+  for(const o of Object.values(state.tank)){
+    if(o === c || o.x === undefined) continue;
+    const ox = c.x-o.x, oy = (c.y-o.y)*0.55;
+    const dd = Math.hypot(ox, oy);
+    if(dd < 0.20 && dd > 0.0001){
+      const push = 0.00085*(1-dd/0.20);
+      c.vx += (ox/dd)*push;
+      c.vy += (oy/dd)*push;
+    }
+  }
+
+  c.vx *= 0.94; c.vy *= 0.94;
+  c.x += c.vx; c.y += c.vy + Math.sin(c.phase)*0.00035;
+
+  // corrupted daemons twitch
+  if(corrupt > 0.35){ c.x += (Math.random()-0.5)*0.0016*corrupt; }
+
+  if(c.x < 0.05){ c.x = 0.05; c.vx = Math.abs(c.vx); }
+  if(c.x > 0.95){ c.x = 0.95; c.vx = -Math.abs(c.vx); }
+  if(c.y < 0.10){ c.y = 0.10; c.vy = Math.abs(c.vy); }
+  if(c.y > 0.90){ c.y = 0.90; c.vy = -Math.abs(c.vy); }
+  c.facing = c.vx >= 0 ? 1 : -1;
+}
+
+function tankDraw(ctx, c, W, H){
+  const d = c.d, care = d.care || {};
+  const col = d.color || EL_COLORS[d.element] || '#8B7CF6';
+  const size = (STAGE_SIZE[d.stage] || 14) * (0.85 + 0.06*(d.rarity||1));
+  const x = c.x*W, y = c.y*H;
+  const hunger = (care.hunger ?? 100)/100;
+  const energy = (care.energy ?? 100)/100;
+  const corrupt = (care.corruption ?? 0)/100;
+  const alpha = 0.72 + 0.28*Math.max(0.3, (hunger+energy)/2);
+
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(c.facing, 1);
+  ctx.globalAlpha = alpha;
+
+  // rare daemons carry a halo
+  if((d.rarity||1) >= 3){
+    const g = ctx.createRadialGradient(0,0,size*0.4,0,0,size*2.1);
+    g.addColorStop(0, col+'44'); g.addColorStop(1, col+'00');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0,0,size*2.1,0,Math.PI*2); ctx.fill();
+  }
+
+  // tail: a sine ribbon trailing behind
+  ctx.beginPath();
+  ctx.moveTo(-size*0.5, 0);
+  for(let i=1;i<=6;i++){
+    const t = i/6;
+    ctx.lineTo(-size*0.5 - t*size*1.15,
+               Math.sin(c.phase - t*2.4)*size*0.42*t);
+  }
+  ctx.strokeStyle = col; ctx.globalAlpha = alpha*0.5;
+  ctx.lineWidth = Math.max(1.5, size*0.16); ctx.lineCap='round';
+  ctx.stroke();
+  ctx.globalAlpha = alpha;
+
+  // fins scale with rarity
+  const fins = Math.min(4, 1 + Math.floor((d.rarity||1)/2));
+  for(let i=0;i<fins;i++){
+    const a = -0.5 + i*(1.0/Math.max(1,fins-1||1));
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-size*0.7, a*size*1.5, -size*0.15, a*size*1.15);
+    ctx.fillStyle = col+'55'; ctx.fill();
+  }
+
+  // body
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size*0.95, size*0.62, Math.sin(c.phase)*0.10, 0, Math.PI*2);
+  ctx.fillStyle = col; ctx.globalAlpha = alpha*0.85; ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 1.2; ctx.strokeStyle = col; ctx.stroke();
+
+  // eye — sleepy when exhausted
+  const open = energy > 0.18 ? 1 : 0.18;
+  ctx.beginPath();
+  ctx.ellipse(size*0.42, -size*0.12, size*0.15, size*0.15*open, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#0b1120'; ctx.fill();
+
+  // umbra static
+  if(corrupt > 0.35){
+    ctx.globalAlpha = alpha*corrupt*0.8;
+    for(let i=0;i<3;i++){
+      ctx.beginPath();
+      ctx.arc((Math.random()-0.5)*size*2, (Math.random()-0.5)*size*1.4,
+              Math.random()*1.6, 0, Math.PI*2);
+      ctx.fillStyle = '#8B7CF6'; ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // name, and a quiet word when something's wrong
+  ctx.globalAlpha = 0.62;
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8494ad';
+  const lab = y + size*0.62 + 13 + ((d.id*7)%3)*4;
+  ctx.fillText(d.name, x, lab);
+  const need = (care.hunger ?? 100) < 25 ? 'hungry'
+             : (care.energy ?? 100) < 20 ? 'tired'
+             : (care.corruption ?? 0) > 55 ? 'corrupted'
+             : (care.happiness ?? 100) < 25 ? 'lonely' : null;
+  if(need){
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = need==='corrupted' ? '#8B7CF6' : '#E8C84D';
+    ctx.fillText(need, x, lab + 11);
+  }
+  ctx.globalAlpha = 1;
+}
+
 /* -- danger zone: wipe the save and start over -- */
 function confirmReset(){
-  modal(`<div class="card reset-modal" style="padding:22px;max-width:440px">
-    <h2 style="font-size:19px;margin-bottom:8px;color:var(--danger)">Reset progression?</h2>
-    <div class="muted" style="font-size:13px;margin-bottom:14px">
-      This permanently deletes every daemon, all rift progress and layer depth,
-      resources, facilities, eggs, and the Pulse journal. You'll start over with
-      a fresh Kernel. This cannot be undone.
-    </div>
-    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:12px">
-      <input type="checkbox" id="keep-dev" checked style="width:auto;margin:0"> Keep discovered devices (skip re-scanning)
-    </label>
-    <div class="mono muted" style="font-size:11px">Type RESET to confirm:</div>
+  modal(`<div class="card reset-modal" style="padding:22px;max-width:500px">
+    <h2 style="font-size:19px;margin-bottom:6px;color:var(--danger)">Reset</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:14px">Choose how much to undo. None of this can be reversed.</div>
+
+    <label class="rscope"><input type="radio" name="rscope" value="rifts">
+      <span><b>Re-roll the rifts</b><br><span class="muted">Fresh worlds at layer 0. Keeps your daemons, Bastion, and resources. Use this when you want new nodes without losing your roster.</span></span></label>
+
+    <label class="rscope"><input type="radio" name="rscope" value="progress" checked>
+      <span><b>Reset progression</b><br><span class="muted">Deletes every daemon, all depth, resources, facilities and the Pulse. Keeps the rifts you've already resolved so you needn't re-sweep.</span></span></label>
+
+    <label class="rscope"><input type="radio" name="rscope" value="everything">
+      <span><b>Wipe the instance</b><br><span class="muted">Everything above, plus the discovered rifts and your Array level. Exactly like first boot.</span></span></label>
+
+    <div class="mono muted" style="font-size:11px;margin-top:12px">Type RESET to confirm:</div>
     <input id="reset-word" placeholder="RESET" autocomplete="off" spellcheck="false">
     <div style="display:flex;gap:9px">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn" style="border-color:var(--danger);color:var(--danger)" id="do-reset">Reset everything</button>
+      <button class="btn" style="border-color:var(--danger);color:var(--danger)" id="do-reset">Confirm</button>
     </div></div>`);
   $('#reset-word').focus();
   $('#do-reset').onclick=async()=>{
     if($('#reset-word').value.trim()!=='RESET'){toast('Type RESET to confirm');return;}
-    const keep=$('#keep-dev').checked;
-    const res=await api('/api/reset',{method:'POST',body:JSON.stringify({confirm:'RESET',keep_devices:keep})});
+    const scope=(document.querySelector('input[name="rscope"]:checked')||{}).value||'progress';
+    const res=await api('/api/reset',{method:'POST',body:JSON.stringify({confirm:'RESET',scope})});
     closeModal();
     if(res.error){toast(res.message||res.error);return;}
-    toast('Progression reset — starting over');
-    state.party=[]; state.devices=keep?state.devices:[];
+    toast(scope==='rifts'?'Rifts re-rolled':scope==='everything'?'Instance wiped':'Progression reset');
+    state.party=[]; state.currentRift=null;
+    if(scope!=='rifts') state.devices=(scope==='everything')?[]:state.devices;
     await boot();
   };
 }

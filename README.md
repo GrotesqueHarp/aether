@@ -223,6 +223,27 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## The Tank (v0.10)
+
+The Nest opens with a living tank. Every daemon is drawn procedurally from its
+own genome — element sets the palette, stage the size, rarity the finnage and
+halo — so a creature looks like itself and like its sigil. No image assets;
+it's all maths, same as the sigils.
+
+**Motion carries the care meters.** Hungry daemons sink and slow, exhausted
+ones half-close their eyes and drift, lonely ones keep to themselves, corrupted
+ones flicker with umbra static. A one-word tag appears under anything that
+needs you. The intent is that you can tell your Nest wants attention without
+reading a single bar.
+
+It changes nothing mechanically. Watching is its own reward, never a bonus —
+there is no benefit to leaving the page open.
+
+Rendering pauses when the tab is hidden or when you navigate away from the
+Nest, so an always-open dashboard doesn't cook your server. Creature positions
+persist in memory, so the live refresh redrawing the Nest doesn't teleport
+everyone back to the middle.
+
 ## The long sky (v0.9.2)
 
 Resolving every rift is meant to be the work of a year or more, not a weekend.
@@ -313,31 +334,39 @@ clicking Feed doesn't rebuild the page.
 Redraws still pause while a modal or battle is open, while a dropdown or text
 field is focused, and while the tab is hidden; scroll position is preserved.
 
-## Resetting (v0.8.2)
+## Resetting (v0.9.4)
 
-**Reset progression** sits at the bottom of the sidebar. It deletes every
-daemon, all rift progress and layer depth, resources, facilities, eggs, and the
-Pulse journal, then hands you a fresh Kernel. Discovered devices are kept by
-default, since re-scanning your LAN is busywork rather than progress.
+**Reset** sits at the bottom of the sidebar and asks you to type RESET. Three
+scopes:
 
-The UI asks you to type RESET. From a shell:
+| scope | wipes | keeps |
+|---|---|---|
+| `rifts` | rift depth, tiers, wards, captures, harvest posts, expeditions, incursions | daemons, Bastion, resources, discovered rifts, lifetime layers |
+| `progress` | daemons, resources, facilities, eggs, all depth, the Pulse | the rifts you've already resolved |
+| `everything` | all of the above plus discovered rifts and your Array level | nothing — identical to first boot |
+
+`rifts` is the one you want when the world model changes under you and you'd
+like fresh nodes without surrendering your roster. It deliberately preserves
+lifetime layers dug, since that's a record of what you did and the Array's
+gates are built on it.
+
+From a shell:
 
 ```bash
-curl -X POST localhost:8787/api/reset \
-     -H 'Content-Type: application/json' \
-     -d '{"confirm": "RESET"}'
+curl -X POST localhost:8787/api/reset -H 'Content-Type: application/json' \
+     -d '{"confirm": "RESET", "scope": "rifts"}'
 
-# also forget discovered devices:
-curl -X POST localhost:8787/api/reset \
-     -H 'Content-Type: application/json' \
-     -d '{"confirm": "RESET", "keep_devices": false}'
+curl -X POST localhost:8787/api/reset -H 'Content-Type: application/json' \
+     -d '{"confirm": "RESET", "scope": "everything"}'
 ```
 
-The confirmation string is required — a bare POST is refused. This clears rows
-rather than dropping tables, so the schema stays at its current version and no
-migration reruns. The ticker's clocks are reset too; otherwise the first beat
-after a reset would bill the new save for every hour that passed under the old
-one.
+Omitting `scope` defaults to `progress`. The confirmation string is required —
+a bare POST is refused, as is an unrecognised scope.
+
+Resets clear rows rather than dropping tables, so the schema stays at its
+current version and no migration reruns. The ticker's clocks are reset too;
+otherwise the first beat after a reset would bill the new save for every hour
+that passed under the old one.
 
 ## Automation over clicking (v0.8.1)
 

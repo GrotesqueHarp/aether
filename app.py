@@ -689,19 +689,39 @@ def hatchery_synthesize():
 # -- danger zone --
 @app.route("/api/reset", methods=["POST"])
 def reset():
-    """Wipe progression and start over. Requires an explicit confirmation
-    string so a stray POST can't nuke a save."""
+    """Start over, at whichever scope you mean.
+
+      rifts       re-roll the worlds, keep your daemons and Bastion
+      progress    wipe the save, keep the rifts you've already resolved
+      everything  full instance wipe, back to first boot
+
+    Requires an explicit confirmation string so a stray POST can't nuke a save.
+    """
     body = request.get_json(force=True, silent=True) or {}
     if body.get("confirm") != "RESET":
         return jsonify({"error": "not_confirmed",
                         "message": 'Send {"confirm": "RESET"} to proceed.'}), 400
-    keep = bool(body.get("keep_devices", True))
-    cleared = db.reset_all(keep_devices=keep)
+
+    scope = body.get("scope")
+    if scope is None:      # legacy callers used keep_devices only
+        scope = "progress" if body.get("keep_devices", True) else "everything"
+    if scope not in ("rifts", "progress", "everything"):
+        return jsonify({"error": "bad_scope",
+                        "message": "scope must be rifts, progress or everything"}), 400
+
+    if scope == "rifts":
+        cleared = db.reset_rifts()
+        db.add_event("reset", "The Array re-swept the sky; every rift was "
+                              "re-resolved from scratch.")
+        return jsonify({"ok": True, "scope": scope, "cleared": cleared})
+
+    cleared = db.reset_all(keep_devices=(scope == "progress"))
     ticker.reset_clocks()
     db.add_daemon(starter_daemon())
     db.set_meta("bootstrapped", "1")
     db.add_event("reset", "The aether was reformatted. Everything begins again.")
-    return jsonify({"ok": True, "cleared": cleared, "kept_devices": keep})
+    return jsonify({"ok": True, "scope": scope, "cleared": cleared,
+                    "kept_devices": scope == "progress"})
 
 
 # -- the crucible --
