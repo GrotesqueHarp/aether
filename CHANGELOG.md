@@ -20,6 +20,22 @@ back.
 - Traits, squad synergies, expedition orders, milestones, creature behaviours,
   and the shaft in cross-section.
 
+## [0.13.2]
+
+### Fixed
+- **Docker build failed** with `failed to compute cache key: "/README.md": not
+  found`. 0.13.1 added `README.md` to a `COPY`, but `.dockerignore` excludes it
+  from the build context on purpose. The README is documentation, not runtime
+  data — only `CHANGELOG.md` is actually read (by `/api/changelog`), so the
+  COPY now takes just that.
+
+### Added
+- `tools/audit.py` gained a Docker context pass: it cross-checks every
+  `COPY` source in the Dockerfile against `.dockerignore` and the filesystem.
+  A COPY of an excluded file fails the build with an opaque cache-key error
+  that no amount of running the app will reveal — only building the image
+  will, which is easy to skip.
+
 ## [0.13.1]
 
 ### Fixed

@@ -301,11 +301,12 @@ polling loop.
 
 ```bash
 python3 tools/audit.py --seed      # seeds a save, then checks everything
-python3 tools/audit.py --no-ui     # API only
+python3 tools/audit.py --no-ui     # API + Docker context only
 ```
 
-Two passes: every endpoint against a seeded save, then every view in a real
-browser — checking each rendered what it should, that the nav highlights the
+Three passes: the Dockerfile's `COPY` sources cross-checked against
+`.dockerignore`, then every endpoint against a seeded save, then every view in
+a real browser — checking each rendered what it should, that the nav highlights the
 right item, and that the console stayed clean.
 
 The browser pass is the one that matters. Nearly every bug that has reached a

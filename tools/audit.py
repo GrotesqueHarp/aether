@@ -59,6 +59,56 @@ def check(label: str, cond: bool, detail: str = ""):
     (OK.append(label) if cond else BAD.append((label, detail or "failed")))
 
 
+# ----------------------------------------------------------- docker context --
+def audit_docker():
+    """Would `docker build` actually find everything the Dockerfile COPYs?
+
+    This exists because a COPY of a file excluded by .dockerignore fails the
+    build with an opaque "failed to compute cache key ... not found" — and it
+    cannot be caught by running the app, only by building the image. Which is
+    easy to skip.
+    """
+    import fnmatch
+    import os
+    try:
+        with open("Dockerfile", encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        BAD.append(("Dockerfile", "not found"))
+        return
+    try:
+        with open(".dockerignore", encoding="utf-8") as fh:
+            patterns = [l.strip() for l in fh
+                        if l.strip() and not l.startswith("#")]
+    except OSError:
+        patterns = []
+
+    def ignored(path: str) -> bool:
+        for pat in patterns:
+            p = pat.rstrip("/")
+            if fnmatch.fnmatch(path, p) or fnmatch.fnmatch(os.path.basename(path), p):
+                return True
+            if path.startswith(p + "/"):
+                return True
+        return False
+
+    for line in lines:
+        line = line.strip()
+        if not line.upper().startswith("COPY "):
+            continue
+        parts = line[5:].split()
+        if len(parts) < 2:
+            continue
+        for src in parts[:-1]:
+            if src.startswith("--"):
+                continue
+            exists = os.path.exists(src.rstrip("/"))
+            check(f"docker COPY {src} exists", exists, "no such file in the repo")
+            if exists:
+                check(f"docker COPY {src} in context", not ignored(src.rstrip("/")),
+                      "excluded by .dockerignore — the build will fail here")
+
+
 # ------------------------------------------------------------------ seeding --
 def seed():
     call("POST", "/api/bootstrap", {}, expect=(200, 400))
@@ -221,6 +271,8 @@ def main():
     print(f"auditing {a.base}\n")
     if a.seed:
         seed()
+    print("Docker context pass...")
+    audit_docker()
     print("API pass...")
     audit_api()
     if not a.no_ui:
