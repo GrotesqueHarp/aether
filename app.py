@@ -11,6 +11,7 @@ daemons can be dispatched on idle expeditions that report to a journal.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -684,6 +685,67 @@ def hatchery_synthesize():
                  f"A new egg settles into the Hatchery, humming with "
                  f"{body['essence']} essence.")
     return jsonify(res)
+
+
+# -- records & homecoming --
+@app.route("/api/records")
+def records():
+    days = min(float(request.args.get("days", "30")), 400)
+    rows = db.list_history(time.time() - days * 86400)
+    return jsonify({"points": rows, "days": days,
+                    "sample_every_h": round(ticker.HISTORY_EVERY / 3600, 2)})
+
+
+@app.route("/api/visit", methods=["POST"])
+def visit():
+    """What happened since you last opened the page.
+
+    Called once per page load, not on the polling loop — otherwise 'while you
+    were away' would always report the last ten seconds. The previous visit's
+    totals are stashed in meta so the delta survives restarts.
+    """
+    now = time.time()
+    res = db.res_all()
+    roster = db.list_daemons()
+    snap = {"ts": now,
+            "bits": res.get("bits", 0),
+            "cores": res.get("cores", 0),
+            "aethercite": res.get("aethercite", 0),
+            "essence": sum(v for k, v in res.items() if k.startswith("essence.")),
+            "layers": db.total_layers_cleared(),
+            "roster": len(roster)}
+    prev_raw = db.get_meta("last_visit", "")
+    db.set_meta("last_visit", json.dumps(snap))
+    if not prev_raw:
+        return jsonify({"first": True})
+    try:
+        prev = json.loads(prev_raw)
+    except ValueError:
+        return jsonify({"first": True})
+
+    away = now - prev.get("ts", now)
+    if away < 300:                       # a reload isn't an absence
+        return jsonify({"away": False})
+
+    kinds = ("hatch", "capture", "boss", "overclock", "incursion_win",
+             "incursion_fall", "egg_laid", "build", "rift_found", "evolve")
+    counts = {}
+    for e in db.list_events(4000):
+        if e["ts"] > prev.get("ts", 0) and e["kind"] in kinds:
+            counts[e["kind"]] = counts.get(e["kind"], 0) + 1
+    return jsonify({
+        "away": True,
+        "seconds": int(away),
+        "gained": {k: round(snap[k] - prev.get(k, 0), 1)
+                   for k in ("bits", "cores", "aethercite", "essence")},
+        "layers": snap["layers"] - prev.get("layers", 0),
+        "roster_change": snap["roster"] - prev.get("roster", 0),
+        "events": counts,
+        "highlights": [e for e in db.list_events(400)
+                       if e["ts"] > prev.get("ts", 0)
+                       and e["kind"] in ("boss", "overclock", "incursion_win",
+                                         "incursion_fall", "capture", "hatch")][:6],
+    })
 
 
 # -- changelog --

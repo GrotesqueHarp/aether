@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -95,6 +95,14 @@ def _migrate_6_to_7(c: sqlite3.Connection):
         c.execute("ALTER TABLE devices ADD COLUMN found_at INTEGER NOT NULL DEFAULT 0")
 
 
+def _migrate_7_to_8(c: sqlite3.Connection):
+    """v0.10.4 -> v0.11: the history table (created by init_db).
+
+    Nothing to reshape — but note that graphs can only ever show what was
+    sampled, so history starts accumulating from the moment this runs, not
+    retroactively."""
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
@@ -102,7 +110,8 @@ MIGRATIONS = {
     4: _migrate_4_to_5,
     5: _migrate_5_to_6,
     6: _migrate_6_to_7,
-    # 7: _migrate_7_to_8,   <- next schema change goes here
+    7: _migrate_7_to_8,
+    # 8: _migrate_8_to_9,   <- next schema change goes here
 }
 
 
@@ -182,6 +191,17 @@ def init_db():
                 hatch_at REAL NOT NULL,
                 essence TEXT NOT NULL,
                 state TEXT NOT NULL DEFAULT 'incubating'
+            );
+            CREATE TABLE IF NOT EXISTS history (
+                ts REAL PRIMARY KEY,
+                bits REAL NOT NULL DEFAULT 0,
+                cores REAL NOT NULL DEFAULT 0,
+                aethercite REAL NOT NULL DEFAULT 0,
+                essence REAL NOT NULL DEFAULT 0,
+                power INTEGER NOT NULL DEFAULT 0,
+                roster INTEGER NOT NULL DEFAULT 0,
+                layers INTEGER NOT NULL DEFAULT 0,
+                bits_rate REAL NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS facilities (
                 key TEXT PRIMARY KEY,
@@ -626,10 +646,42 @@ def set_found_at(mac: str, level: int):
         c.execute("UPDATE devices SET found_at = ? WHERE mac = ?", (level, mac))
 
 
+# --- history ----------------------------------------------------------------
+HISTORY_KEEP_DAYS = 400
+
+
+def add_history(row: dict):
+    with _conn() as c:
+        c.execute(
+            """INSERT OR REPLACE INTO history
+               (ts, bits, cores, aethercite, essence, power, roster, layers, bits_rate)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (row["ts"], row.get("bits", 0), row.get("cores", 0),
+             row.get("aethercite", 0), row.get("essence", 0),
+             row.get("power", 0), row.get("roster", 0),
+             row.get("layers", 0), row.get("bits_rate", 0)))
+        c.execute("DELETE FROM history WHERE ts < ?",
+                  (row["ts"] - HISTORY_KEEP_DAYS * 86400,))
+
+
+def list_history(since: float = 0.0) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM history WHERE ts >= ? ORDER BY ts",
+                         (since,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def last_history() -> Optional[dict]:
+    with _conn() as c:
+        row = c.execute("SELECT * FROM history ORDER BY ts DESC LIMIT 1").fetchone()
+    return dict(row) if row else None
+
+
 # --- reset ------------------------------------------------------------------
 # Everything the game accumulates, in the order it's safe to clear.
 RESETTABLE = ["daemons", "rift_progress", "events", "expeditions", "resources",
-              "harvests", "eggs", "facilities", "training", "incursions"]
+              "harvests", "eggs", "facilities", "training", "incursions",
+              "history"]
 
 
 def reset_rifts() -> dict:

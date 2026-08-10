@@ -17,6 +17,26 @@ back.
 
 ### Added
 - Poking: click a daemon in the Tank and it reacts.
+- Traits, squad synergies, expedition orders, milestones, creature behaviours,
+  and the shaft in cross-section.
+
+## [0.11.0] — Schema v8
+
+### Added
+- **Records.** Hourly samples of Bits, income, party power, lifetime layers,
+  Cores, essence and roster size, drawn as inline SVG charts over 7/30/90/400
+  days. Slow-burn progress is invisible in a resource bar; a month of
+  harvesting needs a curve to be legible. Sampling starts when this ships —
+  graphs can only ever show what was recorded, so there is no retroactive
+  history.
+- **While you were away.** A summary on page load after any gap over five
+  minutes: what was harvested and dug, how the roster changed, and highlights
+  pulled from the Pulse.
+
+### Fixed
+- The homecoming check was wired into the polling loop rather than page load,
+  so `/api/visit` re-stamped the "last seen" time every ten seconds and you
+  were never recorded as having been away.
 
 ## [0.10.4]
 

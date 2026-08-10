@@ -230,6 +230,20 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .clrel li{font-size:13.5px;line-height:1.55;margin-bottom:4px;color:var(--text)}
 .clrel code{font-family:var(--mono);font-size:12px;background:#0c1220;padding:1px 5px;border-radius:4px}
 
+.rec{padding:15px 17px}
+.rec-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.rec-h h3{font-size:15px}
+.rec-h .up{color:var(--online);font-size:12.5px}
+.rec-h .down{color:var(--muted);font-size:12.5px}
+.spark{width:100%;height:64px;display:block}
+.sparkfoot{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:2px}
+.rec-note{font-size:11.5px;color:var(--muted);margin-top:6px}
+.nodata{font-size:12px;color:var(--dim);padding:18px 0;text-align:center}
+.awaygrid{display:flex;flex-direction:column;gap:2px}
+.awayrow{display:flex;justify-content:space-between;padding:7px 11px;background:#0c1220;border-radius:7px;font-size:13.5px}
+.awayhl{margin-top:13px;border-top:1px solid var(--hair);padding-top:10px}
+.awayhl-row{font-size:12.5px;color:var(--muted);padding:3px 0}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -334,6 +348,7 @@ body.dashmode .main{padding:0}
     <div class="navitem" data-view="nest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>The Nest</div>
     <div class="navitem" data-view="bastion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 21V9l4-3 4 3 4-3 4 3v12"/><path d="M4 21h16M10 21v-5h4v5"/></svg>Bastion</div>
     <div class="navitem" data-view="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</div>
+    <div class="navitem" data-view="records"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16"/><path d="M7 15l4-5 3 3 5-7"/></svg>Records</div>
     <div class="navitem" data-view="changelog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg>Changelog<span id="cl-dot" class="cl-dot" hidden></span></div>
     <div class="navitem" onclick="toggleDash()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Dashboard</div>
     <div class="foot muted">
@@ -389,7 +404,6 @@ async function pollState(){
     const oldBits=state.res.bits||0;
     state.res=st.resources||{};state.rates=st.rates||{};state.net=st;
     renderResBar();
-  checkChangelog();
     if((state.res.bits||0)>oldBits+0.05){
       const el=document.querySelector('[data-res="bits"]');
       if(el){el.classList.add('bump');setTimeout(()=>el.classList.remove('bump'),600);}
@@ -423,6 +437,7 @@ async function redrawView(){
     else if(state.view==='pulse'){ await pulseView(); }
     else if(state.view==='dash'){ await dashView(); }
     else if(state.view==='changelog'){ /* static; no redraw needed */ }
+    else if(state.view==='records'){ /* sampled hourly; no need to chase it */ }
   }catch(e){ /* transient failure: the next check will catch up */ }
   window.scrollTo(0,y);
   state.refreshing=false;
@@ -487,6 +502,10 @@ async function boot(){
   const st=await api('/api/state');
   state.net=st;state.res=st.resources||{};state.rates=st.rates||{};
   renderResBar();
+  // once per page load, never on the polling loop — /api/visit stamps the
+  // "last seen" time, so calling it every 10s would mean you were never away
+  checkChangelog();
+  checkHomecoming();
   $('#foot-net').textContent=(st.local_ip||'')+(st.subnet? '\n'+st.subnet:'');
   const foot=document.querySelector('.rail .foot');
   if(foot&&st.version)foot.insertAdjacentHTML('beforeend',`<div class="mono" style="color:var(--dim)">v${st.version}</div>`);
@@ -496,7 +515,7 @@ async function boot(){
   go('scan');
 }
 function setActive(v){document.querySelectorAll('.navitem').forEach(n=>n.classList.toggle('active',n.dataset.view===v));}
-function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView}[v]||scanView)();}
+function go(v){state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView,records:recordsView}[v]||scanView)();}
 
 /* -- first run: hatch the Anchor egg -- */
 function bootstrapView(){
@@ -1083,6 +1102,112 @@ async function checkChangelog(){
     const dot=$('#cl-dot');
     if(dot) dot.hidden = !(d.unread>0);
   }catch(e){}
+}
+
+
+/* ================= RECORDS =================
+   Slow-burn progress is invisible without a chart. A month of harvesting looks
+   like nothing at all in a resource bar, and "am I actually getting stronger"
+   is unanswerable from a single snapshot.
+
+   Drawn as inline SVG from the sampled history — no chart library, same as
+   everything else here. */
+
+function spark(points, key, colour, {height=64, fmtY=fmt, area=true}={}){
+  const vals = points.map(p => p[key] ?? 0);
+  if(vals.length < 2) return `<div class="nodata">not enough history yet — samples are taken hourly</div>`;
+  const W = 100, H = height;
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const span = (hi - lo) || 1;
+  const x = i => (i/(vals.length-1))*W;
+  const y = v => H - ((v-lo)/span)*(H-8) - 4;
+  const line = vals.map((v,i) => `${i?'L':'M'}${x(i).toFixed(2)},${y(v).toFixed(2)}`).join(' ');
+  const fill = area ? `<path d="${line} L${W},${H} L0,${H} Z" fill="${colour}" opacity=".13"/>` : '';
+  return `
+    <svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${fill}<path d="${line}" fill="none" stroke="${colour}" stroke-width="1.1"
+        vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    </svg>
+    <div class="sparkfoot"><span>${fmtY(lo)}</span><span>${fmtY(hi)}</span></div>`;
+}
+
+async function recordsView(){
+  const days = state.recordDays || 30;
+  $('#main').innerHTML = `
+    <div class="topbar"><div><div class="eyebrow">The long view</div><h1>Records</h1></div>
+    <div class="picker" id="range">${[7,30,90,400].map(d =>
+      `<div class="pick ${d===days?'sel':''}" data-days="${d}">${d>=400?'all':d+'d'}</div>`).join('')}</div></div>
+    <div id="charts"><div class="spin"></div></div>`;
+  $('#range').querySelectorAll('[data-days]').forEach(el => el.onclick = () => {
+    state.recordDays = +el.dataset.days; recordsView();
+  });
+
+  const d = await api(`/api/records?days=${days}`);
+  const pts = d.points || [];
+  const first = pts[0], last = pts[pts.length-1];
+  const delta = (k) => (first && last) ? last[k] - first[k] : 0;
+  const since = first ? Math.max(1, Math.round((Date.now()/1000 - first.ts)/86400)) : 0;
+
+  const card = (title, key, colour, note) => `
+    <div class="card rec">
+      <div class="rec-h"><h3>${title}</h3>
+        <span class="mono ${delta(key)>=0?'up':'down'}">${delta(key)>=0?'+':''}${fmt(delta(key))}</span></div>
+      ${spark(pts, key, colour)}
+      <div class="rec-note">${note}</div>
+    </div>`;
+
+  $('#charts').innerHTML = pts.length < 2
+    ? `<div class="empty">History starts when v0.11 does — samples are taken hourly, so
+       come back tomorrow and this becomes a graph. ${pts.length} sample(s) so far.</div>`
+    : `<div class="mono muted" style="font-size:12px;margin-bottom:12px">
+         ${pts.length} samples over ~${since} day(s) · one every ${d.sample_every_h}h</div>
+       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(310px,1fr))">
+         ${card('Bits', 'bits', '#DCE3EE', 'total banked')}
+         ${card('Income', 'bits_rate', '#3FD08A', 'Bits per hour from posted daemons')}
+         ${card('Party power', 'power', '#8B7CF6', 'your three strongest combined')}
+         ${card('Layers dug', 'layers', '#E8C84D', 'lifetime, network-wide — what gates the Array')}
+         ${card('Cores', 'cores', '#E8C84D', 'facilities past L4 and every Overclock')}
+         ${card('Essence', 'essence', '#B08A54', 'all six kinds combined')}
+         ${card('Roster', 'roster', '#7FCBEB', 'daemons in your care')}
+       </div>`;
+}
+
+/* -- while you were away -- */
+function awayLine(sec){
+  const h = sec/3600;
+  if(h < 1)  return `${Math.round(sec/60)} minutes`;
+  if(h < 48) return `${h.toFixed(1)} hours`;
+  return `${(h/24).toFixed(1)} days`;
+}
+
+async function checkHomecoming(){
+  let d;
+  try{ d = await api('/api/visit', {method:'POST', body:JSON.stringify({})}); }
+  catch(e){ return; }
+  if(!d || !d.away) return;
+
+  const g = d.gained || {};
+  const rows = [];
+  if(g.bits > 0)       rows.push(['Bits harvested', fmt(g.bits), '#DCE3EE']);
+  if(g.essence > 0)    rows.push(['Essence gathered', fmt(g.essence), '#B08A54']);
+  if(g.cores > 0)      rows.push(['Cores', fmt(g.cores), '#E8C84D']);
+  if(g.aethercite > 0) rows.push(['Aethercite', fmt(g.aethercite), '#7FCBEB']);
+  if(d.layers > 0)     rows.push(['Layers dug', d.layers, '#8B7CF6']);
+  if(d.roster_change)  rows.push(['Roster change', (d.roster_change>0?'+':'')+d.roster_change, '#3FD08A']);
+
+  // nothing moved: don't interrupt someone with an empty box
+  if(!rows.length && !(d.highlights||[]).length) return;
+
+  modal(`<div class="card" style="padding:24px;max-width:520px">
+    <div class="eyebrow">While you were away</div>
+    <h2 style="font-size:21px;margin:4px 0 14px">${awayLine(d.seconds)} of subspace</h2>
+    <div class="awaygrid">
+      ${rows.map(([k,v,c]) => `<div class="awayrow"><span>${k}</span><b style="color:${c}">${v}</b></div>`).join('')}
+    </div>
+    ${(d.highlights||[]).length ? `<div class="awayhl">${d.highlights.map(e =>
+      `<div class="awayhl-row"><span class="dfeed-k">${e.kind.replace(/_/g,' ')}</span>${e.text}</div>`).join('')}</div>` : ''}
+    <button class="btn primary" style="margin-top:16px" onclick="closeModal()">Continue</button>
+  </div>`);
 }
 
 /* ================= DASHBOARD =================

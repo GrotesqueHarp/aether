@@ -223,6 +223,22 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Records & homecoming (v0.11)
+
+**Records** (sidebar) charts Bits, income, party power, lifetime layers, Cores,
+essence and roster size over 7 / 30 / 90 / 400 days, drawn as inline SVG from
+hourly samples. A year-long game needs a curve to make its progress legible —
+a resource bar can't show you that last month was better than the one before.
+
+History accumulates from v0.11 onward and **is not retroactive**: nothing in an
+older save records what your party power was three weeks ago. Sample interval
+is `AETHER_HISTORY_EVERY` (default 3600s); roughly 400 days are retained.
+
+**While you were away** greets you after any gap over five minutes with what
+the machine did in your absence — harvested, dug, hatched, captured, defended —
+plus highlights from the Pulse. It fires once per page load, never on the
+polling loop.
+
 ## Changelog
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md), following

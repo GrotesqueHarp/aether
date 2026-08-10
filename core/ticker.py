@@ -56,6 +56,42 @@ _warned: dict[tuple, float] = {}
 WARN_COOLDOWN = 2 * 3600
 
 
+HISTORY_EVERY = float(os.environ.get("AETHER_HISTORY_EVERY", str(3600)))
+
+
+def sample_history(now: float | None = None, force: bool = False):
+    """Record a point for the Records graphs.
+
+    Sampled hourly rather than derived on demand because most of this can't be
+    reconstructed after the fact — you cannot ask a save what your party power
+    was three weeks ago. Graphs only ever show what was recorded, so this
+    starts accumulating the moment it ships.
+    """
+    from . import economy
+    now = now or time.time()
+    last = float(db.get_meta("history_tick", "0") or 0)
+    if not force and last and now - last < HISTORY_EVERY:
+        return
+    db.set_meta("history_tick", str(now))
+    res = db.res_all()
+    roster = sorted(db.list_daemons(), key=lambda d: -d.power())
+    try:
+        rates = economy.total_rates()
+    except Exception:
+        rates = {}
+    db.add_history({
+        "ts": now,
+        "bits": res.get("bits", 0),
+        "cores": res.get("cores", 0),
+        "aethercite": res.get("aethercite", 0),
+        "essence": sum(v for k, v in res.items() if k.startswith("essence.")),
+        "power": sum(d.power() for d in roster[:3]),
+        "roster": len(roster),
+        "layers": db.total_layers_cleared(),
+        "bits_rate": rates.get("bits", 0),
+    })
+
+
 def reset_clocks():
     """Forget when drift was last applied, and clear the warning cooldowns.
     Without this the first beat after a reset would bill the new save for
@@ -320,6 +356,7 @@ def _run():
             bastion.tick_training(now)
             war.tick_signal(now)
             war.tick_deadlines(now)
+            sample_history(now)
             if now - last_presence > PRESENCE_EVERY:
                 pass          # presence policing retired in v0.9
                 last_presence = now
