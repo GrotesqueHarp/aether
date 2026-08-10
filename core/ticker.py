@@ -264,8 +264,11 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         d.wins += 1
         d.care["energy"] = max(0, d.care["energy"] - 12)
         boss = node["is_gatekeeper"]
+        from . import mastery
+        prog_now = db.get_progress(mac)
         db.set_progress(mac, layer, layer >= LAYERS)
-        db.bump_layers_dug()
+        db.bump_layers_dug(2 if mastery.has(prog_now.get("mastery_xp", 0), "mastered") else 1)
+        db.add_mastery_xp(mac, mastery.xp_for_clear(layer, layer % 25 == 0))
         lvl_txt = f" It reached Lv{d.level}!" if ev["levels"] else ""
         if boss:
             db.add_event("exped_boss",
@@ -312,7 +315,10 @@ def tick_harvests(now: float | None = None):
                          f"{d.name} was pushed off its harvest node in "
                          f"{rift['world_name']}.", mac=h["mac"], daemon_id=d.id)
             continue
+        from . import mastery
+        hours = max(0.0, (now - h["last_tick"]) / 3600.0)
         economy.accrue_harvest(d, rift, h, dormancy(h["mac"]), now)
+        db.add_mastery_xp(h["mac"], mastery.xp_for_harvest(h["node_index"], hours))
 
 
 def tick_eggs(now: float | None = None):

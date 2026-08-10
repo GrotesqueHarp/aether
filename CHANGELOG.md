@@ -20,6 +20,49 @@ back.
 - Traits, squad synergies, expedition orders, milestones, creature behaviours,
   and the shaft in cross-section.
 
+## [0.13.1]
+
+### Fixed
+- **Dashboard opened the Rifts view.** `boot()` rebinds every `.navitem` click
+  to `go(dataset.view)`, which overwrote the Dashboard's inline handler; with
+  no `data-view` it called `go(undefined)` and fell through to Rifts.
+- **Changelog was blank in Docker.** The Dockerfile never copied `CHANGELOG.md`
+  into the image, so it worked locally and was empty in the container. It now
+  ships `CHANGELOG.md` and `README.md`, and the view says so plainly if the
+  file is absent rather than rendering nothing.
+- **No more web fonts.** The UI pulled three families from Google Fonts on
+  every page load — which fails on an LXC with no internet, and sent a request
+  to a CDN each time you opened your own dashboard. Replaced with system font
+  stacks; the app is now genuinely offline.
+
+### Added
+- `tools/audit.py` — exercises every endpoint and every view in a real browser,
+  checking that each view rendered, the nav highlights correctly, and the
+  console stayed clean. Run `python3 tools/audit.py --seed`.
+
+## [0.13.0] — Schema v10
+
+### Added
+- **Rift Mastery**, the third prestige system. Every rift carries its own
+  1–99 track, earned by digging its layers and by working its shelves.
+  Each level adds +1% to that rift's yields; milestones land at 10
+  (expeditions dig 25% faster), 25 (an extra capture per tier), 50 (enemies
+  fight two levels lower), 75 (+50% Cores from posts) and 99 (yields doubled,
+  and layers dug count double toward the Array).
+- **Resonance**, a global multiplier drawn from the *sum* of mastery across
+  every rift you hold. This is the half that rewards breadth: twenty rifts at
+  25 give x1.72 where a single rift at 99 gives x1.15, so finding more of the
+  sky pays off in a way grinding one shaft never does.
+- Reaching 99 takes roughly 1.05M XP — about 250 days of working a rift's
+  shelves. Knobs: `AETHER_MASTERY_K`, `AETHER_MASTERY_P`,
+  `AETHER_MASTERY_YIELD`, `AETHER_RESONANCE`.
+
+### Fixed
+- `rift_progress` gained `mastery_xp` in the migration but not in the
+  fresh-database `CREATE TABLE`, so new saves crashed on every rift view while
+  migrated ones worked. `get_progress()` likewise omitted the field from both
+  its row and default dictionaries.
+
 ## [0.12.1] — Schema v9
 
 ### Added

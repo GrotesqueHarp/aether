@@ -223,6 +223,25 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Rift Mastery (v0.13)
+
+The third prestige loop, and the one that rewards breadth.
+
+Every rift carries its own **1–99 mastery track**, earned by digging its layers
+and by working its shelves. Each level adds +1% to that rift's yields, with
+milestones at 10 (expeditions dig 25% faster), 25 (an extra capture per tier),
+50 (enemies fight two levels lower), 75 (+50% Cores from posts) and 99 (yields
+doubled, and layers dug count double toward the Array). Reaching 99 is roughly
+250 days of working a rift — it's a landmark, not a checkbox.
+
+**Resonance** is the global half: a multiplier drawn from the *sum* of mastery
+across every rift you hold. Twenty rifts at mastery 25 give x1.72 where a single
+rift at 99 gives x1.15 — so resolving more of the sky, and owning more hardware,
+pays off in a way that grinding one shaft never does.
+
+Knobs: `AETHER_MASTERY_K`, `AETHER_MASTERY_P`, `AETHER_MASTERY_YIELD`,
+`AETHER_RESONANCE`.
+
 ## Glyphs (v0.12.1)
 
 The second prestige loop, and the horizontal one. Seven kinds of craftable
@@ -277,6 +296,22 @@ is `AETHER_HISTORY_EVERY` (default 3600s); roughly 400 days are retained.
 the machine did in your absence — harvested, dug, hatched, captured, defended —
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
+
+## Auditing a build
+
+```bash
+python3 tools/audit.py --seed      # seeds a save, then checks everything
+python3 tools/audit.py --no-ui     # API only
+```
+
+Two passes: every endpoint against a seeded save, then every view in a real
+browser — checking each rendered what it should, that the nav highlights the
+right item, and that the console stayed clean.
+
+The browser pass is the one that matters. Nearly every bug that has reached a
+release here was invisible server-side: a button defined but never rendered, a
+nav item whose handler was overwritten by a later binding, a file missing from
+the Docker image. The API can be perfect while the page is broken.
 
 ## Changelog
 

@@ -53,8 +53,11 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     mult = (ECON_MULT * (DORMANT_RATE_MULT if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
 
-    from . import glyph
+    from . import glyph, mastery
     mult *= 1.0 + glyph.bonus(getattr(daemon, "equipped", []), "harvest")
+    mult *= mastery.yield_mult(progress.get("mastery_xp", 0))
+    mult *= mastery.resonance([mastery.level_from_xp(x)
+                               for x in db.all_mastery_xp().values()])
     bits_hr = (6.0 + depth_factor * 3.2) * power_factor * mult
     essence_kind = "umbra" if dormant else ESSENCE_BY_BIOME[rift["biome_key"]]
     out = {"bits": bits_hr, f"essence.{essence_kind}": bits_hr / 10.0}
@@ -63,6 +66,8 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     # boss layers the whole economy could jam behind one unbeatable fight.
     # A shallow post yields almost nothing; a deep one is a genuine supply.
     core_rate = (layer / 100.0) * (0.25 + rift["depth"] * 0.03) * mult
+    if mastery.has(progress.get("mastery_xp", 0), "rich_veins"):
+        core_rate *= 1.5
     if is_gatekeeper(layer):
         core_rate *= 2.5
         out["bits"] *= 0.6

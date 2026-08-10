@@ -36,6 +36,7 @@ except ModuleNotFoundError:
 from core import db, scan, ticker, economy, bastion, war
 from core import daemon as daemon_mod
 from core import glyph as glyph_mod
+from core import mastery
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
 from core import world as world_mod
@@ -312,6 +313,9 @@ def rift(mac):
         (prog["captures_taken"] + 1) * world_mod.CAPTURE_EVERY)
     r["fully_cleared"] = prog["cleared"] >= world_mod.LAYERS
     r["harvest_every"] = world_mod.HARVEST_EVERY
+    r["mastery"] = mastery.progress(r["progress"].get("mastery_xp", 0))
+    r["resonance"] = round(mastery.resonance(
+        [mastery.level_from_xp(x) for x in db.all_mastery_xp().values()]), 3)
     r["overclock_cost"] = war.overclock_cost(r["progress"]["tier"])
     r["next_tier_boss_power"] = war.next_tier_boss_power(r["mac"])
     r["can_downclock"] = r["progress"]["tier"] > 0
@@ -522,7 +526,11 @@ def battle():
         reward["levels"] = levels
         if layer == prog["cleared"] + 1:          # frontier: real progress
             db.set_progress(r["mac"], layer, layer >= world_mod.LAYERS)
-            db.bump_layers_dug()
+            gk = world_mod.is_gatekeeper(layer)
+            db.bump_layers_dug(2 if mastery.has(prog.get("mastery_xp", 0), "mastered") else 1)
+            mxp = mastery.xp_for_clear(layer, gk)
+            db.add_mastery_xp(r["mac"], mxp)
+            reward["mastery_xp"] = round(mxp, 1)
             reward["cleared_layer"] = True
             loot = economy.node_loot(r, layer, dim, prog)
             economy.grant(loot)

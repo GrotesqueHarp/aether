@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -111,6 +111,13 @@ def _migrate_8_to_9(c: sqlite3.Connection):
     """v0.11 -> v0.12.1: the glyphs table (created by init_db)."""
 
 
+def _migrate_9_to_10(c: sqlite3.Connection):
+    """v0.12.1 -> v0.13: rift_progress.mastery_xp."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(rift_progress)")}
+    if "mastery_xp" not in cols:
+        c.execute("ALTER TABLE rift_progress ADD COLUMN mastery_xp REAL NOT NULL DEFAULT 0")
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
@@ -120,8 +127,10 @@ MIGRATIONS = {
     6: _migrate_6_to_7,
     7: _migrate_7_to_8,
     8: _migrate_8_to_9,
+    9: _migrate_9_to_10,
     8: _migrate_8_to_9,
-    # 9: _migrate_9_to_10,  <- next schema change goes here
+    9: _migrate_9_to_10,
+    # 10: _migrate_10_to_11, <- next schema change goes here
 }
 
 
@@ -151,7 +160,8 @@ def init_db():
                 ward INTEGER NOT NULL DEFAULT 0,
                 signal REAL NOT NULL DEFAULT 0,
                 captured INTEGER NOT NULL DEFAULT 0,
-                captures_taken INTEGER NOT NULL DEFAULT 0
+                captures_taken INTEGER NOT NULL DEFAULT 0,
+                mastery_xp REAL NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
@@ -342,12 +352,13 @@ def get_progress(mac: str) -> dict:
     if not row:
         return {"mac": mac, "cleared": 0, "boss_down": 0,
                 "tier": 0, "ward": 0, "signal": 0.0, "captured": 0,
-                "captures_taken": 0}
+                "captures_taken": 0, "mastery_xp": 0.0}
     return {"mac": row["mac"], "cleared": row["cleared"],
             "boss_down": row["boss_down"], "tier": row["tier"],
             "ward": row["ward"], "signal": row["signal"],
             "captured": row["captured"],
-            "captures_taken": row["captures_taken"]}
+            "captures_taken": row["captures_taken"],
+            "mastery_xp": row["mastery_xp"] if "mastery_xp" in row.keys() else 0.0}
 
 
 def set_progress(mac: str, cleared: int, boss_down: bool):
@@ -361,6 +372,22 @@ def set_progress(mac: str, cleared: int, boss_down: bool):
                  updated=excluded.updated""",
             (mac, cleared, 1 if boss_down else 0, time.time()),
         )
+
+
+def add_mastery_xp(mac: str, amount: float):
+    if amount <= 0:
+        return
+    with _conn() as c:
+        c.execute("INSERT OR IGNORE INTO rift_progress (mac, updated) VALUES (?, ?)",
+                  (mac, time.time()))
+        c.execute("UPDATE rift_progress SET mastery_xp = mastery_xp + ? WHERE mac = ?",
+                  (amount, mac))
+
+
+def all_mastery_xp() -> dict:
+    with _conn() as c:
+        rows = c.execute("SELECT mac, mastery_xp FROM rift_progress").fetchall()
+    return {r["mac"]: r["mastery_xp"] for r in rows}
 
 
 def set_progress_fields(mac: str, **fields):

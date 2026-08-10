@@ -20,7 +20,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY app.py VERSION ./
+COPY app.py VERSION CHANGELOG.md README.md ./
 COPY core/ ./core/
 COPY static/ ./static/
 COPY vendor/ ./vendor/

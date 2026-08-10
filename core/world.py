@@ -138,12 +138,21 @@ def is_harvest_shelf(layer: int) -> bool:
     return layer % HARVEST_EVERY == 0
 
 
-def layer_level(depth: int, layer: int, tier: int = 0) -> int:
+def layer_level(depth: int, layer: int, tier: int = 0, mac: str | None = None) -> int:
     # gentle opening: the first ten layers ramp in, so a starter daemon can
     # reach its first harvest post without a party
+    # Familiar Ground (mastery 50): ground you know well fights easier
+    familiar = 0
+    if mac:
+        try:
+            from . import db, mastery
+            if mastery.has(db.get_progress(mac).get("mastery_xp", 0), "familiar"):
+                familiar = 2
+        except Exception:
+            familiar = 0
     ramp = 0.45 + 0.055 * min(layer, 10)
     base = depth + layer * (0.75 + depth * 0.06) * ramp
-    return max(1, round(base * (1 + 0.35 * tier)) + tier * 5)
+    return max(1, round(base * (1 + 0.35 * tier)) + tier * 5 - familiar)
 
 
 def layer_enemies(mac: str, layer: int, tier: int = 0) -> list:
@@ -155,7 +164,7 @@ def layer_enemies(mac: str, layer: int, tier: int = 0) -> list:
     depth, biome = rift["depth"], rift["biome"]
     n = foes_at(layer)
     boss = is_gatekeeper(layer)
-    lvl = layer_level(depth, layer, tier)
+    lvl = layer_level(depth, layer, tier, mac)
     # split the difficulty budget across the pack
     each = max(1, round(lvl / (1 + 0.22 * (n - 1))))
 
@@ -177,7 +186,7 @@ def layer_enemies(mac: str, layer: int, tier: int = 0) -> list:
 def layer_spec(mac: str, layer: int, tier: int = 0) -> dict:
     """Display/reward descriptor for one layer."""
     rift = generate_rift(mac)
-    lvl = layer_level(rift["depth"], layer, tier)
+    lvl = layer_level(rift["depth"], layer, tier, rift["mac"])
     boss = is_gatekeeper(layer)
     return {
         "layer": layer,
@@ -199,9 +208,16 @@ def layer_window(mac: str, cleared: int, tier: int = 0, back: int = 4,
     return [layer_spec(mac, L, tier) for L in range(lo, hi + 1)]
 
 
-def captures_available(cleared: int, taken: int) -> int:
-    """One capture per 10 layers reached, minus what you've already claimed."""
-    return max(0, cleared // CAPTURE_EVERY - taken)
+def captures_available(cleared: int, taken: int, mastery_xp: float = 0.0) -> int:
+    """One capture per 10 layers reached, minus what you've already claimed.
+
+    A rift at mastery 25 ("Echo") gives one extra per tier — knowing a place
+    well enough to find what it hides."""
+    from . import mastery
+    earned = cleared // CAPTURE_EVERY
+    if mastery.has(mastery_xp, "echo"):
+        earned += 1
+    return max(0, earned - taken)
 
 
 def capture_daemon(mac: str, milestone: int, tier: int = 0):
@@ -210,7 +226,7 @@ def capture_daemon(mac: str, milestone: int, tier: int = 0):
     mac = normalize_mac(mac)
     rift = generate_rift(mac)
     r = rift_rng(mac).sub("capture", str(tier), str(milestone))
-    lvl = layer_level(rift["depth"], milestone * CAPTURE_EVERY, tier)
+    lvl = layer_level(rift["depth"], milestone * CAPTURE_EVERY, tier, rift["mac"])
     d = generate_daemon(
         r, origin_mac=mac, favored_elements=rift["biome"]["elements"],
         min_rarity=2 if milestone < 5 else 3,
