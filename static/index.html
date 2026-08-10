@@ -212,9 +212,17 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
   background:radial-gradient(120% 90% at 50% 0%, rgba(139,124,246,.10), rgba(12,18,32,.85) 70%), #0a0f1c;
   margin-bottom:6px}
 
+@keyframes depthflow{0%{background-position:0 0}100%{background-position:220px 0}}
+@keyframes shaftpulse{0%,72%,100%{border-color:var(--hair);background:rgba(22,30,46,.5)}
+  80%{border-color:rgba(139,124,246,.45);background:rgba(139,124,246,.07)}}
+.layer.done{animation:shaftpulse 5.5s ease-in-out infinite;animation-delay:calc(var(--i,0) * -0.34s)}
+canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 3px}
+
 /* ---- the shaft ---- */
 .depthbar{position:relative;height:10px;background:#0c1220;border:1px solid var(--hair);border-radius:6px;margin:4px 0 8px;overflow:visible}
-.depthbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--aether-dim),var(--aether));border-radius:5px}
+.depthbar>i{display:block;height:100%;border-radius:5px;
+  background:linear-gradient(90deg,var(--aether-dim),var(--aether),rgba(255,255,255,.55),var(--aether),var(--aether-dim));
+  background-size:220px 100%;animation:depthflow 3.4s linear infinite}
 .depthbar .tick{position:absolute;top:-3px;width:2px;height:16px;background:#2b3448;transform:translateX(-1px)}
 .depthbar .tick.gk{height:20px;top:-5px;background:#4a3a2a}
 .depthbar .tick.hit{background:var(--warn)}
@@ -596,6 +604,7 @@ async function riftView(dev){
   renderIncursion(dev);
   renderOverclock(dev);
   renderDownclock(dev);
+  riftFlowMount();
   $('#capture').onclick=async()=>{
     const res=await api('/api/capture',{method:'POST',body:JSON.stringify({mac:dev.mac})});
     if(res.error){toast(res.message||res.error);return;}
@@ -641,7 +650,7 @@ function renderDescent(r){
       L.capture_layer?'<span class="ltag cap">CAPTURE</span>':(L.harvest_shelf?'<span class="ltag cap">SHELF</span>':''),
       L.foes>1?`<span class="ltag">${L.foes} foes</span>`:''
     ].join('');
-    return `<div class="layer ${cls}" data-layer="${L.layer}">
+    return `<div class="layer ${cls}" data-layer="${L.layer}" style="--i:${L.layer%14}">
       <div class="lnum">${String(L.layer).padStart(3,'0')}</div>
       <div class="lbody">
         <div class="lhead">Lv${L.enemy_level} · pw${fmt(L.power)}${r.dormant?' <span style="color:var(--aether)">+dormant</span>':''}</div>
@@ -658,7 +667,11 @@ function renderDescent(r){
     let inner;
     if(hv){
       const rate=Object.entries(hv.rates).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')}/h`).join(' · ');
+      const essKey=Object.keys(hv.rates).find(k=>k.startsWith('essence.'));
+      const essName=essKey?essKey.split('.')[1]:'';
+      const bitsHr=hv.rates.bits||0;
       inner=`<div class="hv-who"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hv.color}"></span> ${hv.name}</div>
+             <canvas class="flow" data-flow="${L}" data-tint="${ESS_COLORS[essName]||hv.color}" data-rate="${bitsHr}"></canvas>
              <div class="hv-rate">${rate}</div><div class="hv-life">${fmt(hv.lifetime_bits)} Bits gathered</div>
              <button class="btn ghost" data-stopharvest="${hv.daemon_id}">Stop</button>`;
     } else {
@@ -979,6 +992,82 @@ function confirmSell(d){
     toast(`${res.name} released — ${Object.entries(res.payout).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')}`).join(', ')}`);
     pollState(); nestView();
   };
+}
+
+
+/* ================= RIFT FLOW =================
+   What a working harvest post looks like from outside: essence drawn up out of
+   the layer and away to the Bastion. Density follows the post's actual yield,
+   so a deep shelf visibly runs harder than a shallow one — the number and the
+   picture say the same thing.
+
+   One shared loop for every canvas on screen; it stops dead when the tab is
+   hidden or you leave the rift. */
+
+const FLOW = { raf:null, streams:new Map() };
+
+function riftFlowMount(){
+  FLOW.streams.clear();
+  document.querySelectorAll('canvas.flow').forEach(cv => {
+    const rect = cv.getBoundingClientRect();
+    if(!rect.width) return;
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = rect.width*dpr; cv.height = rect.height*dpr;
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    // yield -> how thick the stream runs, flattened hard so a 100x richer
+    // shelf reads as "busier", not as a solid wall of light
+    const rate = parseFloat(cv.dataset.rate||'0');
+    const density = Math.max(3, Math.min(22, 3 + Math.log10(1+rate)*7));
+    const parts = [];
+    for(let i=0;i<density;i++) parts.push({
+      x: Math.random()*rect.width,
+      y: Math.random()*rect.height,
+      s: 0.25 + Math.random()*0.75,
+      r: 0.6 + Math.random()*1.5,
+      a: 0.25 + Math.random()*0.55 });
+    FLOW.streams.set(cv, {ctx, w:rect.width, h:rect.height,
+                          tint: cv.dataset.tint || '#8B7CF6', parts});
+  });
+  if(!FLOW.raf && FLOW.streams.size) FLOW.raf = requestAnimationFrame(riftFlowFrame);
+}
+
+function riftFlowFrame(){
+  FLOW.raf = null;
+  if(document.hidden){ FLOW.raf = requestAnimationFrame(riftFlowFrame); return; }
+  let alive = false;
+  for(const [cv, st] of FLOW.streams){
+    if(!cv.isConnected) continue;          // view was redrawn or navigated away
+    alive = true;
+    const {ctx, w, h, tint, parts} = st;
+    ctx.clearRect(0,0,w,h);
+    // a dark conduit, so the essence reads as light moving through it rather
+    // than as grey speckle on a pale card
+    ctx.fillStyle = 'rgba(6,10,20,.72)';
+    ctx.fillRect(0,0,w,h);
+    const g = ctx.createLinearGradient(0,h,0,0);
+    g.addColorStop(0, tint+'30'); g.addColorStop(1, tint+'00');
+    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+
+    ctx.lineCap = 'round';
+    for(const p of parts){
+      p.y -= p.s*1.9;
+      p.x += Math.sin((p.y+p.r*40)/14)*0.25;
+      if(p.y < -4){ p.y = h+4; p.x = Math.random()*w; }
+      // drawn as a short streak: motion you can see in a still frame
+      const len = 3 + p.s*7;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y + len);
+      ctx.lineTo(p.x, p.y);
+      ctx.strokeStyle = tint;
+      ctx.lineWidth = p.r*1.35;
+      ctx.globalAlpha = Math.min(1, p.a*1.5) * (0.3 + 0.7*(1 - p.y/h));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if(alive) FLOW.raf = requestAnimationFrame(riftFlowFrame);
+  else FLOW.streams.clear();
 }
 
 /* ================= THE TANK =================

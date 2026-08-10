@@ -223,6 +223,24 @@ incremental cost curve.
 Slow-burn pacing by design. Tuning knobs (env): `AETHER_ECON_MULT` (global
 economy speed), `AETHER_HATCH_SECONDS` (incubation override).
 
+## Rift ambience (v0.10.1)
+
+Rifts move now too. Three quiet layers:
+
+- **Harvest posts run visibly.** A working shelf shows essence streaking up a
+  dark conduit, tinted by whatever that post actually pulls (Loam brown, Volt
+  yellow, Umbra violet). Stream density follows the post's real yield on a log
+  scale, so a deep shelf plainly runs harder than a shallow one without a
+  hundredfold shelf becoming a solid wall of light.
+- **The depth bar carries a current** — a shimmer travelling the resolved
+  portion of the shaft.
+- **Cleared layers pulse** in a slow wave down the shaft, staggered by layer,
+  so the ground you've taken feels alive rather than greyed out.
+
+Same rules as the Tank: purely cosmetic, no mechanical effect, and everything
+stops dead when the tab is hidden or you navigate away, so a dashboard left
+open overnight costs nothing.
+
 ## The Tank (v0.10)
 
 The Nest opens with a living tank. Every daemon is drawn procedurally from its
