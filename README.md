@@ -297,6 +297,25 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Traits and expedition orders (v0.16)
+
+**Traits** give each daemon a character beyond its numbers. One quirk, or two
+if it's rare: Tunneler digs faster, Prospector pulls more Cores, Stoic corrupts
+half as slowly, Homebody harvests well but travels badly. Most carry a cost as
+well as a benefit, so they aren't a second rarity roll — and they're what makes
+keeping a mediocre daemon a judgement rather than a subtraction.
+
+They're derived from the daemon's seed rather than stored, so every creature
+you already own has always had its traits, with no migration and no re-rolling.
+
+**Expedition orders** let you dispatch with intent:
+
+- **Dig** — push deeper, layer by layer. The default.
+- **Farm** — rework the deepest layer already taken for loot and XP without
+  advancing, so you can bank resources without outrunning your party.
+- **Scout** — no fighting at all: maps the ground ahead, earns rift mastery,
+  and reports what's waiting below.
+
 ## Party composition (v0.15)
 
 Bringing three daemons is no longer just "take your strongest three". A party

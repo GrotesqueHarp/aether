@@ -213,9 +213,11 @@ def resolve_incursion(mac: str, defenders: list[Daemon],
     for d in defenders:
         c = Daemon.from_dict(d.to_dict())
         c.id = d.id
-        if aegis > 1:
+        from . import traits
+        boost = aegis * traits.mult(d, "defence")
+        if boost > 1:
             for k in c.base_stats:
-                c.base_stats[k] = int(c.base_stats[k] * aegis)
+                c.base_stats[k] = int(c.base_stats[k] * boost)
         boosted.append(c)
 
     result = simulate_team(boosted, nulls,

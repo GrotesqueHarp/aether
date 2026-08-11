@@ -25,7 +25,8 @@ import os
 import threading
 import time
 
-from . import db, scan
+from . import db
+from . import traits, scan
 from .daemon import Daemon
 from .world import generate_rift, world_name
 from .battle import simulate
@@ -153,11 +154,11 @@ def apply_drift(now: float | None = None):
                     rate = (ENERGY_WORK_DRAIN if d.care["energy"] > ENERGY_WORK_FLOOR
                             else abs(ENERGY_WORK_DRAIN))
                 else:
-                    rate = ENERGY_REGEN
+                    rate = ENERGY_REGEN * traits.mult(d, "energy_regen")
             elif k == "hunger":
-                rate = per * hunger_mult + feed_rate
+                rate = per * hunger_mult * traits.mult(d, "drift.hunger") + feed_rate
             else:
-                rate = per
+                rate = per * traits.mult(d, f"drift.{k}")
             nxt = d.care[k] + rate * hours
             if k == "energy" and working:
                 nxt = (max(ENERGY_WORK_FLOOR, nxt) if rate < 0
@@ -215,7 +216,9 @@ def check_presence(now: float | None = None):
 def tick_expeditions(now: float | None = None):
     now = now or time.time()
     for ex in db.list_expeditions(active_only=True):
-        if now - ex["last_tick"] < FIGHT_EVERY:
+        d_pre = db.get_daemon(ex["daemon_id"])
+        cadence = FIGHT_EVERY / (traits.mult(d_pre, "expedition") if d_pre else 1.0)
+        if now - ex["last_tick"] < cadence:
             continue
         d = db.get_daemon(ex["daemon_id"])
         if not d:
@@ -247,7 +250,30 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
 
     from .world import layer_spec, layer_enemies
     from .battle import simulate_team
-    layer = prog["cleared"] + 1
+    orders = ex.get("orders", "dig") or "dig"
+
+    if orders == "scout":
+        # no fighting: reads the ground ahead and learns the rift instead
+        from . import mastery
+        db.add_mastery_xp(mac, mastery.xp_for_clear(prog["cleared"] + 1, False) * 0.8)
+        d.care["energy"] = max(0, d.care["energy"] - 3)
+        db.save_daemon(d)
+        if ex["fights"] % 6 == 0:
+            ahead = min(LAYERS, prog["cleared"] + 5)
+            sp = layer_spec(rift["mac"], ahead, prog["tier"])
+            db.add_event("exped_scout",
+                         f"{d.name} maps the ground ahead in {rift['world_name']}: "
+                         f"layer {ahead} holds {sp['foes']} foe(s) around Lv"
+                         f"{sp['enemy_level']}"
+                         f"{' — a Gatekeeper' if sp['is_gatekeeper'] else ''}.",
+                         mac=mac, daemon_id=d.id)
+        db.update_expedition(d.id, fights=ex["fights"] + 1)
+        return
+
+    # farm re-runs the deepest layer already taken, for loot and XP, and never
+    # pushes deeper — a way to bank resources without outrunning your party
+    farming = orders == "farm" and prog["cleared"] > 0
+    layer = prog["cleared"] if farming else prog["cleared"] + 1
     node = layer_spec(rift["mac"], layer, prog["tier"])
     foes = layer_enemies(rift["mac"], layer, prog["tier"])
     dim = dormancy(mac)
@@ -264,6 +290,18 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         d.wins += 1
         d.care["energy"] = max(0, d.care["energy"] - 12)
         boss = node["is_gatekeeper"]
+        if farming:
+            from . import economy
+            loot = economy.node_loot(rift, layer, dim, prog)
+            economy.grant(loot)
+            db.save_daemon(d)
+            db.add_event("exped_farm",
+                         f"{d.name} works layer {layer} of {rift['world_name']} "
+                         f"again, bringing back "
+                         + ", ".join(f"{v:g} {k.replace('essence.', '')}"
+                                     for k, v in loot.items()) + ".",
+                         mac=mac, daemon_id=d.id)
+            return
         from . import mastery
         prog_now = db.get_progress(mac)
         db.set_progress(mac, layer, layer >= LAYERS)

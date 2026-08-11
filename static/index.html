@@ -297,6 +297,10 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .syn{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--online);border:1px solid var(--online);border-radius:999px;padding:2px 9px;margin:6px 6px 0 0}
 .syn.none{color:var(--dim);border-color:var(--hair)}
 
+.trait{font-family:var(--mono);font-size:10px;color:var(--aether);border:1px solid var(--aether-dim);border-radius:999px;padding:2px 8px}
+.expbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.expbar select{background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:7px;padding:7px 9px;font-size:12.5px}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -966,9 +970,17 @@ function renderExpedBar(dev){
       toast('Recalled to the Nest');await refreshRoster();riftView(dev);
     };
   } else if(r.progress.cleared < (r.layers||100) && state.party && state.party.length){
-    host.innerHTML=`<button class="btn" id="dispatch">Dispatch ${state.roster.find(d=>d.id===state.party[0])?.name||'lead daemon'} on expedition — fights nodes solo, reports to the Pulse</button>`;
+    const who=state.roster.find(d=>d.id===state.party[0])?.name||'lead daemon';
+    host.innerHTML=`<div class="expbar">
+      <select id="orders" title="What should it do while it's down there?">
+        <option value="dig">Dig — push deeper, layer by layer</option>
+        <option value="farm">Farm — rework the deepest layer for loot</option>
+        <option value="scout">Scout — map what's ahead, no fighting</option>
+      </select>
+      <button class="btn" id="dispatch">Send ${who}</button>
+    </div>`;
     $('#dispatch').onclick=async()=>{
-      const res=await api('/api/expedition',{method:'POST',body:JSON.stringify({daemon_id:state.party[0],mac:dev.mac})});
+      const res=await api('/api/expedition',{method:'POST',body:JSON.stringify({daemon_id:state.party[0],mac:dev.mac,orders:($('#orders')||{}).value||'dig'})});
       if(res.error){toast(res.message||res.error);return;}
       toast('Expedition dispatched');await refreshRoster();riftView(dev);
     };
@@ -2069,6 +2081,7 @@ function daemonCard(d){
       <button class="btn ghost" data-train="def" data-id="${d.id}">+DEF</button>
       <button class="btn ghost" data-train="spd" data-id="${d.id}">+SPD</button>
     </div>`}
+    ${(d.traits&&d.traits.length)?`<div class="worn">${d.traits.map(t=>`<span class="trait" title="${t.desc}">${t.name}</span>`).join('')}</div>`:''}
     ${(d.equipped&&d.equipped.length)?`<div class="worn">${d.equipped.map(x=>`<span class="wglyph" title="${x.kind} Q${x.quality}">${x.kind} Q${x.quality}</span>`).join('')}<span class="mono muted" style="font-size:10px">${d.equipped.length}/${d.glyph_slots} slots</span></div>`:''}
     ${(evo||asc)?`<div class="actions">${evo}${asc}</div>`:''}
   </div>`;

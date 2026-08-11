@@ -84,6 +84,7 @@ def _daemon_payload(d: Daemon) -> dict:
     out["on_expedition"] = bool(ex and ex["state"] == "active")
     if out["on_expedition"]:
         out["expedition"] = {"mac": ex["mac"], "fights": ex["fights"],
+                             "orders": ex.get("orders", "dig"),
                              "world": generate_rift(ex["mac"])["world_name"]}
     hv = db.get_harvest(d.id) if d.id else None
     out["harvesting"] = None
@@ -622,7 +623,10 @@ def expedition_start():
     if any(e["mac"] == r["mac"] for e in db.list_expeditions()):
         return jsonify({"error": "rift_busy",
                         "message": "A daemon is already working this rift."}), 400
-    db.start_expedition(d.id, r["mac"])
+    orders = body.get("orders", "dig")
+    if orders not in ("dig", "farm", "scout"):
+        return jsonify({"error": "bad_orders"}), 400
+    db.start_expedition(d.id, r["mac"], orders)
     db.add_event("exped_start",
                  f"{d.name} sets out on an expedition into {r['world_name']}.",
                  mac=r["mac"], daemon_id=d.id)

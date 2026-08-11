@@ -35,7 +35,7 @@ DB_PATH = os.environ.get(
 #     way without rebuilding the table).
 #   * data reshaping (e.g. renaming a care meter inside the daemons JSON blob)
 #     gets a Python function.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def _migrate_1_to_2(c: sqlite3.Connection):
@@ -118,6 +118,13 @@ def _migrate_9_to_10(c: sqlite3.Connection):
         c.execute("ALTER TABLE rift_progress ADD COLUMN mastery_xp REAL NOT NULL DEFAULT 0")
 
 
+def _migrate_10_to_11(c: sqlite3.Connection):
+    """v0.15 -> v0.16: expeditions.orders — dig, farm or scout."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(expeditions)")}
+    if "orders" not in cols:
+        c.execute("ALTER TABLE expeditions ADD COLUMN orders TEXT NOT NULL DEFAULT 'dig'")
+
+
 MIGRATIONS = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
@@ -128,6 +135,7 @@ MIGRATIONS = {
     7: _migrate_7_to_8,
     8: _migrate_8_to_9,
     9: _migrate_9_to_10,
+    10: _migrate_10_to_11,
     8: _migrate_8_to_9,
     9: _migrate_9_to_10,
     # 10: _migrate_10_to_11, <- next schema change goes here
@@ -191,7 +199,8 @@ def init_db():
                 state TEXT NOT NULL DEFAULT 'active',
                 started REAL NOT NULL,
                 last_tick REAL NOT NULL,
-                fights INTEGER NOT NULL DEFAULT 0
+                fights INTEGER NOT NULL DEFAULT 0,
+                orders TEXT NOT NULL DEFAULT 'dig'
             );
             CREATE TABLE IF NOT EXISTS resources (
                 kind TEXT PRIMARY KEY,
@@ -555,16 +564,17 @@ def list_events(limit: int = 60) -> list[dict]:
 
 
 # --- expeditions -------------------------------------------------------------
-def start_expedition(daemon_id: int, mac: str):
+def start_expedition(daemon_id: int, mac: str, orders: str = "dig"):
     now = time.time()
     with _conn() as c:
         c.execute(
-            """INSERT INTO expeditions (daemon_id, mac, state, started, last_tick, fights)
-               VALUES (?, ?, 'active', ?, ?, 0)
+            """INSERT INTO expeditions (daemon_id, mac, state, started, last_tick,
+                                       fights, orders)
+               VALUES (?, ?, 'active', ?, ?, 0, ?)
                ON CONFLICT(daemon_id) DO UPDATE SET
                  mac=excluded.mac, state='active', started=excluded.started,
-                 last_tick=excluded.last_tick, fights=0""",
-            (daemon_id, mac, now, now),
+                 last_tick=excluded.last_tick, fights=0, orders=excluded.orders""",
+            (daemon_id, mac, now, now, orders),
         )
 
 

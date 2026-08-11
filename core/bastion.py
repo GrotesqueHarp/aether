@@ -261,9 +261,10 @@ def tick_training(now: float | None = None):
             db.save_daemon(d)
             db.update_training(d.id, last_tick=now)
             continue
-        from . import glyph
+        from . import glyph, traits
         rate = hall_rate(db.facility_level(t["hall"]))
         rate *= 1.0 + glyph.bonus(getattr(d, "equipped", []), "training")
+        rate *= traits.mult(d, "training")
         banked = t["banked"] + rate * hours
         whole = int(banked)
         if whole > 0:

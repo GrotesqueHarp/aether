@@ -108,8 +108,9 @@ class Daemon:
         # no matter how long you grind. Ascension is that channel.
         val *= ASCEND_STAT_MULT ** self.ascensions
         # equipped glyphs: horizontal choice on top of vertical growth
-        from . import glyph
+        from . import glyph, traits
         val *= 1.0 + glyph.stat_bonus(getattr(self, "equipped", []), key)
+        val *= traits.mult(self, f"stat.{key}")
         # care modifiers
         if key == "spd":
             val *= 1.0 - min(self.care["weight"], 90) / 300.0      # heavy = slow
@@ -162,9 +163,9 @@ class Daemon:
     # ---- progression ---------------------------------------------------------
     def gain_xp(self, amount: int) -> dict:
         """Returns a small event dict describing what happened."""
-        from . import glyph
+        from . import glyph, traits
         amount = int(amount * (1.0 + glyph.bonus(
-            getattr(self, "equipped", []), "xp")))
+            getattr(self, "equipped", []), "xp")) * traits.mult(self, "xp"))
         events = {"xp": amount, "levels": 0, "evolved_to": None}
         self.xp += amount
         while self.xp >= self.xp_to_next():
@@ -268,7 +269,8 @@ class Daemon:
         d["can_ascend"] = self.can_ascend()
         d["ascend_cost"] = self.ascend_cost()
         d["ascend_level"] = ASCEND_LEVEL
-        from . import glyph
+        from . import glyph, traits
+        d["traits"] = traits.describe(self)
         d["equipped"] = getattr(self, "equipped", [])
         d["glyph_slots"] = glyph.slots_for(self)
         d["color"] = content.ELEMENT_COLORS.get(self.element, "#8B7CF6")

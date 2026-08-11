@@ -16,10 +16,26 @@ back.
 ## [Unreleased]
 
 ### Added
-- Traits, expedition orders, and the shaft in cross-section.
+- The shaft in cross-section.
 - Teach the simulator about Ascension, Glyphs and Mastery — it currently
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
+
+## [0.16.0] — Schema v11
+
+### Added
+- **Traits.** Every daemon has one quirk, or two if it's rare — Tunneler digs
+  faster, Prospector pulls more Cores, Stoic corrupts half as slowly, Warden
+  defends harder, Homebody harvests well but travels badly. Most carry a cost
+  as well as a benefit, so they're a character rather than a second rarity
+  roll. Derived from the daemon's seed rather than stored, so no migration was
+  needed and every daemon you already own has always had its traits.
+- Traits reach into combat stats, XP, harvest yields, hall training, care
+  drift, expedition speed and incursion defence.
+- **Expedition orders.** Dispatch with intent: **Dig** pushes deeper layer by
+  layer, **Farm** reworks the deepest layer already taken for loot without
+  advancing, and **Scout** maps the ground ahead without fighting, earning rift
+  mastery and reporting what waits below.
 
 ## [0.15.0]
 
