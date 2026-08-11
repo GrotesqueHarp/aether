@@ -342,6 +342,13 @@ body.dashmode .main{padding:0}
 .ms{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;padding:2px 8px;border-radius:999px;border:1px solid var(--hair);color:var(--dim)}
 .ms.have{color:var(--warn);border-color:var(--warn)}
 
+.descent-split{display:flex;gap:20px;align-items:flex-start;max-width:900px}
+.xsec{width:132px;height:560px;flex:none;position:sticky;top:14px}
+.xs-worker circle:first-child{animation:xsPulse 3.2s ease-in-out infinite}
+@keyframes xsPulse{0%,100%{opacity:.95}50%{opacity:.55}}
+.descent-split .shaft{flex:1;min-width:0}
+@media (max-width:900px){.xsec{display:none}}
+
 /* ---- the shaft ---- */
 .depthbar{position:relative;height:10px;background:#0c1220;border:1px solid var(--hair);border-radius:6px;margin:4px 0 8px;overflow:visible}
 .depthbar>i{display:block;height:100%;border-radius:5px;
@@ -773,6 +780,75 @@ async function riftView(dev){
   });
 }
 /* -- the shaft: 100 layers, gatekeepers every 25, a shelf every 10 -- */
+
+/* -- the shaft in cross-section: the rift as a place, not a list --
+   A vertical cut through all 100 layers at once. The list beside it shows the
+   handful of layers you can act on; this shows where those sit in the whole
+   descent, where your daemons are actually standing, and how far the dark
+   still goes. */
+function renderCrossSection(r){
+  const total=r.layers||100, depth=r.progress.cleared;
+  const H=560, W=132, top=16, floor=H-16, span=floor-top;
+  const y=L=>top+(L/total)*span;                 // layer -> pixels, surface at top
+
+  // strata: every 25 layers is a band, darkening with depth
+  const bands=[];
+  for(let b=0;b<4;b++){
+    const from=b*25, to=(b+1)*25;
+    bands.push(`<rect x="26" y="${y(from)}" width="62" height="${y(to)-y(from)}"
+      fill="rgb(${18-b*2},${24-b*4},${44-b*7})"/>`);
+  }
+  // conquered ground
+  const dug=`<rect x="26" y="${y(0)}" width="62" height="${Math.max(0,y(depth)-y(0))}"
+    fill="url(#dugGrad)"/>`;
+
+  // gatekeepers
+  const gks=[25,50,75,100].map(L=>{
+    const passed=depth>=L, yy=y(L);
+    return `<g opacity="${passed?1:0.5}">
+      <line x1="20" y1="${yy}" x2="94" y2="${yy}" stroke="${passed?'#E8C84D':'#4a3a2a'}" stroke-width="1.6"/>
+      <text x="99" y="${yy+3.5}" font-size="9" fill="${passed?'#E8C84D':'#4a3a2a'}"
+        font-family="ui-monospace,monospace">${L}</text></g>`;}).join('');
+
+  // shelves you've reached
+  const every=r.harvest_every||5;
+  const shelves=[];
+  for(let L=every;L<=depth;L+=every){
+    shelves.push(`<line x1="26" y1="${y(L)}" x2="88" y2="${y(L)}"
+      stroke="rgba(139,124,246,.30)" stroke-width="0.8"/>`);
+  }
+
+  // daemons at their posts — the point of the whole picture
+  const posted=Object.entries(r.harvests||{}).map(([L,h])=>{
+    const yy=y(+L);
+    return `<g class="xs-worker"><title>${h.name} — layer ${L}</title>
+      <circle cx="57" cy="${yy}" r="5.5" fill="${h.color}" opacity=".95"/>
+      <circle cx="57" cy="${yy}" r="9" fill="none" stroke="${h.color}" stroke-width="1" opacity=".35"/>
+    </g>`;}).join('');
+
+  // the frontier
+  const fy=y(depth);
+  const frontier=depth<total?`
+    <line x1="18" y1="${fy}" x2="96" y2="${fy}" stroke="var(--aether)" stroke-width="2"/>
+    <circle cx="57" cy="${fy}" r="3" fill="var(--aether)"/>
+    <text x="18" y="${fy-9}" font-size="8.5" fill="var(--aether)"
+      stroke="#0a0f1c" stroke-width="2.6" paint-order="stroke"
+      font-family="ui-monospace,monospace">layer ${depth}</text>`:'';
+
+  return `<svg class="xsec" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMin meet">
+    <defs>
+      <linearGradient id="dugGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#8B7CF6" stop-opacity=".30"/>
+        <stop offset="100%" stop-color="#8B7CF6" stop-opacity=".08"/>
+      </linearGradient>
+    </defs>
+    <text x="26" y="10" font-size="8.5" fill="#5a6884" font-family="ui-monospace,monospace">SURFACE</text>
+    ${bands.join('')}${dug}${shelves.join('')}${gks}${posted}${frontier}
+    <rect x="26" y="${top}" width="62" height="${span}" fill="none"
+      stroke="var(--hair)" stroke-width="1"/>
+  </svg>`;
+}
+
 function renderDescent(r){
   const total=r.layers||100, depth=r.progress.cleared, win=r.window||[];
   const pct=Math.round(100*depth/total);
@@ -836,7 +912,10 @@ function renderDescent(r){
     ${mast}
     <div class="depthbar"><i style="width:${pct}%"></i>${ticks.join('')}</div>
     <div class="depthline mono">layer <b>${depth}</b> / ${total}${r.next_capture_layer?` · next capture at layer ${r.next_capture_layer}`:''}${r.captures_available>0?` · <span style="color:var(--warn)">${r.captures_available} ready to draw</span>`:''}</div>
-    <div class="shaft">${layers}</div>
+    <div class="descent-split">
+      ${renderCrossSection(r)}
+      <div class="shaft">${layers}</div>
+    </div>
     ${shelves.length?`<div class="section-title">Harvest posts</div><div class="shelves">${shelves.join('')}</div>`:''}
   `;
 }

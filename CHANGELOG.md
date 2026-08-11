@@ -16,10 +16,23 @@ back.
 ## [Unreleased]
 
 ### Added
-- The shaft in cross-section.
+- Teach the simulator about Ascension, Glyphs, Traits and Mastery — it
+  currently measures a game without them.
+- Reformat: global prestige. Needs the above first.
 - Teach the simulator about Ascension, Glyphs and Mastery — it currently
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
+
+## [0.16.1]
+
+### Added
+- **The shaft in cross-section.** A vertical cut through all 100 layers beside
+  the descent list: strata darkening with depth, Gatekeeper bands at 25/50/75/
+  100 that light gold once passed, every shelf you've reached, your posted
+  daemons drawn in their own colours at the depth they're standing, and the
+  frontier with the unexplored rock below it. The list shows the handful of
+  layers you can act on; this shows where they sit in the whole descent.
+- Hidden below 900px wide, where there isn't room for it.
 
 ## [0.16.0] — Schema v11
 

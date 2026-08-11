@@ -297,6 +297,16 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## The shaft in cross-section (v0.16.1)
+
+Beside the descent list sits a vertical cut through the whole rift — all 100
+layers at once. Strata darken with depth, Gatekeeper bands light gold once
+you've passed them, shelves you've reached are marked, and your posted daemons
+are drawn in their own colours at the depth they're actually standing. Below
+the frontier is unexplored rock.
+
+The list tells you what you can act on; this tells you where you are.
+
 ## Traits and expedition orders (v0.16)
 
 **Traits** give each daemon a character beyond its numbers. One quirk, or two
