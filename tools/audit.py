@@ -161,6 +161,7 @@ def audit_api():
             check(f"daemon.{key}", key in d, "missing from daemon payload")
 
     for path in ("/api/journal", "/api/hatchery", "/api/bastion", "/api/crucible",
+                 "/api/objectives",
                  "/api/glyphs", "/api/records?days=30", "/api/changelog"):
         call("GET", path)
 
@@ -197,6 +198,7 @@ UI_VIEWS = [
     ("The Nest",  "nest",      "#tank"),
     ("Bastion",   "bastion",   ".fac"),
     ("Pulse",     "pulse",     ".jrow, .empty"),
+    ("Compass",   "compass",   ".obj, .empty"),
     ("Records",   "records",   ".rec, .empty"),
     ("Changelog", "changelog", ".clrel, .empty"),
 ]

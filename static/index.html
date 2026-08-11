@@ -260,6 +260,40 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .worn{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
 .wglyph{font-family:var(--mono);font-size:10px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:2px 8px}
 
+.chap{margin-bottom:22px}
+.chap-h{display:flex;justify-content:space-between;align-items:baseline}
+.chap-h h3{font-size:16px}
+.chap-b{font-size:12.5px;color:var(--muted);margin:2px 0 10px}
+.obj{display:flex;gap:12px;padding:11px 14px;border:1px solid var(--hair);border-radius:10px;margin-bottom:7px;background:rgba(22,30,46,.4)}
+.obj.done{opacity:.5}
+.obj.now{border-color:var(--aether);background:rgba(139,124,246,.07)}
+.obj-tick{font-size:15px;color:var(--online);width:16px;flex:none}
+.obj.now .obj-tick{color:var(--aether)}
+.obj-t{font-weight:600;font-size:14px}
+.obj-now{font-family:var(--mono);font-size:9.5px;color:var(--aether);border:1px solid var(--aether-dim);border-radius:999px;padding:1px 7px;margin-left:8px}
+.obj-w{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:3px}
+.obj-h{font-family:var(--mono);font-size:11.5px;color:var(--warn);margin-top:5px}
+.nudge{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:9px 14px;border:1px solid var(--aether-dim);border-radius:9px;background:rgba(139,124,246,.07);margin-bottom:14px;cursor:pointer;font-size:13px}
+.nudge:hover{background:rgba(139,124,246,.13)}
+.nudge .mono{font-size:9.5px;letter-spacing:.14em;color:var(--aether)}
+.nudge .muted{font-size:12px}
+
+.gsteps{display:flex;flex-direction:column;gap:8px;max-width:820px}
+.gstep{display:flex;gap:13px;padding:12px 15px;border:1px solid var(--hair);border-radius:10px;background:rgba(22,30,46,.45)}
+.gstep.done{opacity:.5}
+.gstep.next{border-color:var(--aether);background:rgba(139,124,246,.08)}
+.gmark{font-size:15px;color:var(--dim);width:16px;flex:none}
+.gstep.done .gmark{color:var(--online)}
+.gtitle{font-weight:600;font-size:14.5px}
+.gnext{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--aether);border:1px solid var(--aether-dim);border-radius:999px;padding:2px 8px;margin-left:9px;text-transform:uppercase}
+.gwhy{font-size:13px;color:var(--muted);line-height:1.55;margin-top:3px}
+.gwhere{font-size:11px;color:var(--dim);margin-top:5px}
+.gtopics{display:flex;flex-direction:column;gap:6px;max-width:820px}
+.gtopic{border:1px solid var(--hair);border-radius:9px;background:rgba(22,30,46,.45)}
+.gtopic summary{padding:11px 15px;cursor:pointer;font-weight:600;font-size:14px}
+.gtopic summary::marker{color:var(--aether)}
+.gtopic>div{padding:0 15px 13px;font-size:13px;color:var(--muted);line-height:1.6}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -373,6 +407,7 @@ body.dashmode .main{padding:0}
     <div class="navitem" data-view="nest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>The Nest</div>
     <div class="navitem" data-view="bastion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 21V9l4-3 4 3 4-3 4 3v12"/><path d="M4 21h16M10 21v-5h4v5"/></svg>Bastion</div>
     <div class="navitem" data-view="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</div>
+    <div class="navitem" data-view="compass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Compass<span id="cmp-dot" class="cl-dot" hidden></span></div>
     <div class="navitem" data-view="records"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16"/><path d="M7 15l4-5 3 3 5-7"/></svg>Records</div>
     <div class="navitem" data-view="changelog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg>Changelog<span id="cl-dot" class="cl-dot" hidden></span></div>
     <div class="navitem" data-view="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Dashboard</div>
@@ -463,6 +498,7 @@ async function redrawView(){
     else if(state.view==='dash'){ await dashView(); }
     else if(state.view==='changelog'){ /* static; no redraw needed */ }
     else if(state.view==='records'){ /* sampled hourly; no need to chase it */ }
+    else if(state.view==='compass'){ await compassView(); }
   }catch(e){ /* transient failure: the next check will catch up */ }
   window.scrollTo(0,y);
   state.refreshing=false;
@@ -544,7 +580,7 @@ function go(v){
   // the dashboard isn't a normal view: it hides the chrome and owns the URL
   // hash, so route it through its own toggle rather than the view table
   if(v==='dash') return toggleDash();
-  state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView,records:recordsView}[v]||scanView)();}
+  state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView,records:recordsView,compass:compassView}[v]||scanView)();}
 
 /* -- first run: hatch the Anchor egg -- */
 function bootstrapView(){
@@ -1229,6 +1265,53 @@ async function checkChangelog(){
   }catch(e){}
 }
 
+
+/* -- the compass: a tutorial you don't have to read -- */
+async function compassView(){
+  $('#main').innerHTML=`<div class="topbar"><div><div class="eyebrow">Where to go next</div><h1>Compass</h1></div>
+    <div class="net" id="cmp-count"></div></div><div id="cmp"><div class="spin"></div></div>`;
+  const d=await api('/api/objectives');
+  $('#cmp-count').textContent=`${d.complete} of ${d.total} complete`;
+  const byChapter={};
+  d.objectives.forEach(o=>(byChapter[o.chapter]=byChapter[o.chapter]||[]).push(o));
+  const nextId=(d.next[0]||{}).id;
+  $('#cmp').innerHTML=d.chapters.map(ch=>{
+    const items=byChapter[ch.key]||[];
+    const got=items.filter(o=>o.done).length;
+    return `<div class="chap">
+      <div class="chap-h"><h3>${ch.name}</h3>
+        <span class="mono muted">${got}/${items.length}</span></div>
+      <div class="chap-b">${ch.blurb}</div>
+      ${items.map(o=>`<div class="obj ${o.done?'done':''} ${o.id===nextId?'now':''}">
+        <div class="obj-tick">${o.done?'✓':'○'}</div>
+        <div>
+          <div class="obj-t">${o.title}${o.id===nextId?'<span class="obj-now">next</span>':''}</div>
+          <div class="obj-w">${o.why}</div>
+          ${o.done?'':`<div class="obj-h">→ ${o.how}</div>`}
+        </div></div>`).join('')}
+    </div>`;}).join('');
+  // reference lives under the objectives: what to do next, then how it works
+  $('#cmp').insertAdjacentHTML('beforeend',
+    `<div class="section-title">Reference</div>
+     <div class="gtopics">${(d.reference||[]).map(t=>
+       `<details class="gtopic"><summary>${t.title}</summary><div>${t.body}</div></details>`
+     ).join('')}</div>`);
+}
+
+// a quiet nudge on the Rifts view, so the Compass gets noticed without nagging
+async function compassNudge(){
+  try{
+    const d=await api('/api/objectives');
+    const dot=$('#cmp-dot'); if(dot) dot.hidden = d.complete >= d.total;
+    const host=$('#cmp-nudge');
+    const n=d.next[0];
+    if(host && n){
+      host.innerHTML=`<div class="nudge" onclick="go('compass')">
+        <span class="mono">NEXT</span><b>${n.title}</b>
+        <span class="muted">${n.how}</span></div>`;
+    }
+  }catch(e){}
+}
 
 /* ================= RECORDS =================
    Slow-burn progress is invisible without a chart. A month of harvesting looks

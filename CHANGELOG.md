@@ -20,6 +20,29 @@ back.
 - Traits, squad synergies, expedition orders, milestones, creature behaviours,
   and the shaft in cross-section.
 
+## [0.14.0]
+
+### Added
+- **Reference** section in the Compass: twelve plain-language topics covering
+  the Array, the descent, where resources come from, automating care, the
+  Bastion, the Crucible, Glyphs, Ascension, Mastery and Resonance, the Null,
+  Overclock, and what happens while you're away. Objectives tell you what to do
+  next; reference tells you how the machine works, and stays useful when you
+  come back after a fortnight.
+
+### Removed
+- `core/guide.py` and its view — a duplicate tutorial built without noticing
+  the Compass already existed. Its objectives checklist was strictly worse than
+  the Compass's chaptered version, which persists completions and journals them
+  to the Pulse; only its reference text was worth keeping, and that has been
+  folded in.
+- `core/sigils.py` — an unwired parallel implementation of what shipped as
+  Glyphs in 0.12.1. Nothing imported it and the UI never called it.
+
+### Changed
+- `tools/audit.py` now covers the Compass view and `/api/objectives`. It was
+  absent from the audit, which is why a whole working tab went unnoticed.
+
 ## [0.13.2]
 
 ### Fixed

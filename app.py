@@ -37,6 +37,7 @@ from core import db, scan, ticker, economy, bastion, war
 from core import daemon as daemon_mod
 from core import glyph as glyph_mod
 from core import mastery
+from core import objectives as objectives_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
 from core import world as world_mod
@@ -724,6 +725,12 @@ def hatchery_synthesize():
                  f"A new egg settles into the Hatchery, humming with "
                  f"{body['essence']} essence.")
     return jsonify(res)
+
+
+# -- the compass --
+@app.route("/api/objectives")
+def objectives():
+    return jsonify(objectives_mod.evaluate())
 
 
 # -- glyphs --

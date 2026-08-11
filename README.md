@@ -297,6 +297,19 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Learning the game
+
+**Compass** (sidebar) is the tutorial, and it teaches by pointing at what you
+should do next rather than by lecturing up front. Twenty-one objectives across
+five chapters — First Light, The Work, The Bastion, Deeper, The Long Game —
+each with why it matters and where to do it. They tick off against your actual
+save as you play, nothing blocks you, and completions are journalled to the
+Pulse.
+
+Below them sits **Reference**: twelve topics covering every system, from what
+Aethercite is for to why breadth beats depth. Objectives go stale once you've
+done them; reference is what you want after a fortnight away.
+
 ## Auditing a build
 
 ```bash
