@@ -16,9 +16,31 @@ back.
 ## [Unreleased]
 
 ### Added
-- Poking: click a daemon in the Tank and it reacts.
-- Traits, squad synergies, expedition orders, milestones, creature behaviours,
-  and the shaft in cross-section.
+- Traits, expedition orders, and the shaft in cross-section.
+- Teach the simulator about Ascension, Glyphs and Mastery — it currently
+  measures a game without prestige.
+- Reformat: global prestige. Needs the above first.
+
+## [0.15.0]
+
+### Added
+- **Squad synergies.** A party earns bonuses for its composition: Spectrum
+  (three different elements, +10% ATK), Closed Triangle (Vaccine, Virus and
+  Data together, +10% HP), Phalanx (one shared attribute, +12% DEF) and Shared
+  Lineage (every member ascended, +8% SPD). Shown live in the party picker and
+  on the victory screen. Applied to clones, so a one-fight bonus can never be
+  written back into stored stats. Magnitudes are deliberately modest — a
+  considered party should feel smart, not make an unconsidered one unviable.
+- **Creature behaviours** in the Tank: exhausted daemons sink to the floor and
+  sleep with their eyes shut, happy ones chase each other, hungry and corrupted
+  ones read as before. One behaviour at a time, most urgent first.
+- **Poking.** Click a daemon and it flares, darts off, and says how it's doing.
+  Entirely cosmetic, as the aquarium always has been.
+- **Day/night tint** — the Tank warms and cools with your local clock.
+
+### Removed
+- "Milestones" from the backlog: the Compass's 21 chaptered objectives already
+  are that feature.
 
 ## [0.14.0]
 

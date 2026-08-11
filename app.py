@@ -37,6 +37,7 @@ from core import db, scan, ticker, economy, bastion, war
 from core import daemon as daemon_mod
 from core import glyph as glyph_mod
 from core import mastery
+from core import synergy
 from core import objectives as objectives_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
@@ -506,14 +507,18 @@ def battle():
     if dim:
         foes = [ticker.dormant_enemy(f) for f in foes]
 
+    # party composition, applied to clones so a one-fight bonus can
+    # never be written back into stored stats
+    fighters, synergies = synergy.apply(party)
     result = simulate_team(
-        party, foes,
+        fighters, foes,
         seed_extra=f"{mac}:{layer}:{sum(d.wins + d.losses for d in party)}")
     won = result["winner"] == "a"
 
     reward = {"xp": 0, "levels": 0, "cleared_layer": False, "layer": layer,
               "gatekeeper": spec["is_gatekeeper"], "dormant_bonus": dim,
-              "loot": {}, "tier": prog["tier"], "capture_unlocked": False}
+              "loot": {}, "tier": prog["tier"], "capture_unlocked": False,
+              "synergies": synergies}
     if won:
         xp_total = int(spec["reward_xp"] * (ticker.DORMANT_XP_MULT if dim else 1.0))
         xp_each = max(1, xp_total // len(party))
@@ -731,6 +736,16 @@ def hatchery_synthesize():
 @app.route("/api/objectives")
 def objectives():
     return jsonify(objectives_mod.evaluate())
+
+
+@app.route("/api/party/synergy", methods=["POST"])
+def party_synergy():
+    """What a party would earn. Computed server-side so the picker can never
+    drift from what the battle actually applies."""
+    b = request.get_json(force=True, silent=True) or {}
+    party = [d for d in (db.get_daemon(int(i)) for i in (b.get("daemon_ids") or []))
+             if d]
+    return jsonify({"synergies": synergy.evaluate(party)})
 
 
 # -- glyphs --

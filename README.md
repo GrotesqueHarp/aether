@@ -297,6 +297,17 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Party composition (v0.15)
+
+Bringing three daemons is no longer just "take your strongest three". A party
+earns **synergies** for how it's built — Spectrum for three different elements,
+Closed Triangle for covering all three attributes, Phalanx for a shared
+attribute, Shared Lineage when every member has ascended. They show in the
+picker before you commit and on the victory screen after.
+
+The bonuses are small on purpose. A considered party should feel clever; an
+unconsidered one should still work, because this is a game you leave running.
+
 ## Learning the game
 
 **Compass** (sidebar) is the tutorial, and it teaches by pointing at what you

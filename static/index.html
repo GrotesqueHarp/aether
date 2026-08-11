@@ -294,6 +294,9 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .gtopic summary::marker{color:var(--aether)}
 .gtopic>div{padding:0 15px 13px;font-size:13px;color:var(--muted);line-height:1.6}
 
+.syn{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--online);border:1px solid var(--online);border-radius:999px;padding:2px 9px;margin:6px 6px 0 0}
+.syn.none{color:var(--dim);border-color:var(--hair)}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -847,6 +850,7 @@ function renderPicker(dev){
       const busy=d.harvesting?'harvesting':d.training?'training':'';
       return `<div class="pick ${idx>=0?'in-party':''}" data-id="${d.id}" title="${busy?'Will be borrowed from '+busy+' and return afterward':''}">${idx>=0?`<span class="pnum">${idx+1}</span>`:''}<span class="dot" style="background:${d.color}"></span>${d.name} <span class="muted mono" style="font-size:11px">Lv${d.level} pw${d.power}${busy?' · '+busy:''}</span></div>`;}).join('')
   }</div>`;
+  refreshSynergy();
   $('#picker').querySelectorAll('.pick').forEach(el=>el.onclick=()=>{
     const id=+el.dataset.id, i=state.party.indexOf(id);
     if(i>=0)state.party.splice(i,1);
@@ -854,6 +858,19 @@ function renderPicker(dev){
     renderPicker(dev);renderExpedBar(dev);
   });
 }
+async function refreshSynergy(){
+  const host=$('#picker'); if(!host||!state.party||!state.party.length)return;
+  let box=document.getElementById('syn');
+  if(!box){ box=document.createElement('div'); box.id='syn'; host.appendChild(box); }
+  try{
+    const r=await api('/api/party/synergy',{method:'POST',
+      body:JSON.stringify({daemon_ids:state.party})});
+    box.innerHTML=(r.synergies||[]).map(x=>
+      `<span class="syn" title="${x.desc}">${x.name}</span>`).join('')
+      || '<span class="syn none">no synergy — try mixing elements or attributes</span>';
+  }catch(e){ box.innerHTML=''; }
+}
+
 function renderOverclock(dev){
   const r=dev.rift;
   if(!r.fully_cleared)return;
@@ -1099,7 +1116,8 @@ async function startBattle(dev,layer){
   if(res.error){toast(res.message||res.error);return;}
   const rw=res.reward;
   const lootTxt=rw.loot&&Object.keys(rw.loot).length?'<br>'+Object.entries(rw.loot).map(([k,v])=>`+${fmt(v)} ${k.replace('essence.','')} `).join(' · '):'';
-  const sub=res.won?`+${rw.xp} XP each${rw.tier?` <span class="tier-chip">T${rw.tier}</span>`:''}${rw.dormant_bonus?' <span style="color:var(--aether)">(dormant ×1.35)</span>':''}${rw.levels?` · +${rw.levels} level(s)!`:''}${rw.boss_down?' · rift stabilized ★':''}${lootTxt}`:'The party retreats, shaken.';
+  const synTxt=(rw.synergies&&rw.synergies.length)?'<br>'+rw.synergies.map(x=>x.name).join(' · '):'';
+  const sub=res.won?`+${rw.xp} XP each${rw.tier?` <span class="tier-chip">T${rw.tier}</span>`:''}${rw.dormant_bonus?' <span style="color:var(--aether)">(dormant ×1.35)</span>':''}${rw.levels?` · +${rw.levels} level(s)!`:''}${rw.boss_down?' · rift stabilized ★':''}${lootTxt}${synTxt}`:'The party retreats, shaken.';
   await showTeamBattle(res.battle,res.party,res.foes,res.won,sub);
   await refreshRoster();pollState();
   dev.rift=await api(`/api/rift/${dev.mac}`);
@@ -1671,6 +1689,29 @@ function tankMount(){
       r:0.5+Math.random()*2.1, s:0.00004+Math.random()*0.00014,
       a:0.06+Math.random()*0.16 });
   }
+  cv.onclick = (ev) => {
+    const r = cv.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width, py = (ev.clientY - r.top) / r.height;
+    let best = null, bestD = 0.09;          // generous hit area; they're small
+    for(const c of Object.values(state.tank || {})){
+      if(c.x === undefined) continue;
+      const dd = Math.hypot(c.x - px, (c.y - py) * 0.6);
+      if(dd < bestD){ best = c; bestD = dd; }
+    }
+    if(best){
+      best.poked = 30;
+      best.tx = Math.min(0.92, Math.max(0.08, px + (Math.random()-0.5)*0.4));
+      best.ty = Math.min(0.88, Math.max(0.12, py - 0.12));
+      const d = best.d, care = d.care || {};
+      const say = best.mood === 'sleeping' ? 'is fast asleep'
+                : best.mood === 'hungry'   ? 'is hungry'
+                : best.mood === 'corrupted'? 'flickers with static'
+                : best.mood === 'playful'  ? 'darts away, delighted'
+                : 'notices you';
+      toast(`${d.name} ${say}`);
+    }
+  };
+  cv.style.cursor = 'pointer';
   if(!TANK.raf) TANK.raf = requestAnimationFrame(tankFrame);
 }
 
@@ -1697,6 +1738,15 @@ function tankFrame(){
   TANK.t += 1;
   ctx.clearRect(0,0,W,H);
 
+  // the tank tracks your clock: warm and bright at midday, cold after dark.
+  // Purely atmospheric — nothing about the game changes with the hour.
+  const hr = new Date().getHours() + new Date().getMinutes()/60;
+  const day = Math.max(0, Math.cos((hr - 13) / 24 * 2 * Math.PI));
+  const tint = ctx.createLinearGradient(0, 0, 0, H);
+  tint.addColorStop(0, `rgba(${Math.round(70+90*day)},${Math.round(70+70*day)},${Math.round(140-20*day)},${0.10+0.10*day})`);
+  tint.addColorStop(1, 'rgba(6,10,22,0)');
+  ctx.fillStyle = tint; ctx.fillRect(0,0,W,H);
+
   // ambient drift
   for(const m of TANK.motes){
     m.y -= m.s * 60;
@@ -1713,6 +1763,17 @@ function tankFrame(){
   TANK.raf = requestAnimationFrame(tankFrame);
 }
 
+function tankMood(d){
+  const c = d.care || {};
+  // one behaviour at a time, most urgent first — a daemon that is both
+  // exhausted and starving should read as exhausted, not flicker between them
+  if((c.energy ?? 100) < 18)      return 'sleeping';
+  if((c.hunger ?? 100) < 25)      return 'hungry';
+  if((c.corruption ?? 0) > 55)    return 'corrupted';
+  if((c.happiness ?? 100) > 70 && (c.energy ?? 0) > 55) return 'playful';
+  return 'idle';
+}
+
 function tankStep(c, W, H){
   const d = c.d, care = d.care || {};
   const energy = (care.energy ?? 100)/100;
@@ -1720,10 +1781,30 @@ function tankStep(c, W, H){
   const happy  = (care.happiness ?? 100)/100;
   const corrupt= (care.corruption ?? 0)/100;
 
+  c.mood = tankMood(d);
   c.phase += 0.012 + 0.02*energy;
+
+  if(c.mood === 'sleeping'){
+    // settles to the floor and stays there, barely moving
+    c.vx *= 0.86; c.vy += 0.00018;
+    c.x += c.vx; c.y = Math.min(0.86, c.y + c.vy);
+    if(c.y >= 0.86){ c.y = 0.86; c.vy = 0; }
+    c.facing = c.facing || 1;
+    return;
+  }
+  if(c.mood === 'playful' && !c.chase && Math.random() < 0.004){
+    // pick someone to chase for a while
+    const others = Object.values(state.tank).filter(o => o !== c && o.x !== undefined);
+    if(others.length) { c.chase = others[Math.floor(Math.random()*others.length)];
+                        c.chaseFor = 220; }
+  }
+  if(c.chase && c.chaseFor-- > 0 && c.chase.x !== undefined){
+    c.tx = c.chase.x; c.ty = c.chase.y;
+  } else if(c.chase){ c.chase = null; }
 
   // listless when tired or starving; lively when fed and content
   const vigour = 0.25 + 0.75*energy*(0.4+0.6*hunger);
+  if(c.poked > 0){ c.poked--; c.dart = Math.max(c.dart, 18); }
   if(Math.random() < 0.004*vigour) c.dart = 26;          // occasional flick
   const speed = (0.00045 + 0.0011*vigour) * (c.dart>0 ? 3.2 : 1);
   if(c.dart>0) c.dart--;
@@ -1830,11 +1911,18 @@ function tankDraw(ctx, c, W, H){
   ctx.lineWidth = 1.2; ctx.strokeStyle = col; ctx.stroke();
 
   // eye — sleepy when exhausted
-  const open = energy > 0.18 ? 1 : 0.18;
+  const open = (c.mood === 'sleeping') ? 0.06 : (energy > 0.18 ? 1 : 0.35);
   ctx.beginPath();
   ctx.ellipse(size*0.42, -size*0.12, size*0.15, size*0.15*open, 0, 0, Math.PI*2);
   ctx.fillStyle = '#0b1120'; ctx.fill();
 
+  // a poked daemon flares briefly — the whole point of poking
+  if(c.poked > 0){
+    ctx.globalAlpha = Math.min(0.5, c.poked / 30);
+    ctx.beginPath(); ctx.arc(0, 0, size * 1.5, 0, Math.PI*2);
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.globalAlpha = alpha;
+  }
   // umbra static
   if(corrupt > 0.35){
     ctx.globalAlpha = alpha*corrupt*0.8;
@@ -1854,6 +1942,13 @@ function tankDraw(ctx, c, W, H){
   ctx.fillStyle = '#8494ad';
   const lab = y + size*0.62 + 13 + ((d.id*7)%3)*4;
   ctx.fillText(d.name, x, lab);
+  if(c.mood === 'sleeping'){
+    ctx.globalAlpha = 0.5; ctx.fillStyle = '#7FCBEB';
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText('z z z', x + size*0.9, y - size*0.7);
+    ctx.globalAlpha = 0.62; ctx.font = '10px ui-monospace, monospace';
+    ctx.fillStyle = '#8494ad';
+  }
   const need = (care.hunger ?? 100) < 25 ? 'hungry'
              : (care.energy ?? 100) < 20 ? 'tired'
              : (care.corruption ?? 0) > 55 ? 'corrupted'
