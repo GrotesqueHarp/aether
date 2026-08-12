@@ -297,6 +297,17 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## The Waystation (v0.19)
+
+Digging turned out to be limited by throughput rather than difficulty: a party
+150x stronger dug no faster, because expeditions were capped at one per rift.
+The Waystation is the valve — each level runs one more expedition at once, and
+several can work the same rift. It's what raw power buys once your daemons
+outclass the ground they're standing on.
+
+With it the curve accelerates instead of flattening: about 6 layers a day in
+the first week, 14 by the fifth, and still climbing.
+
 ## Awards and the Wardrobe (v0.18)
 
 Every other reward in AETHER is a multiplier, and multipliers dilute — the

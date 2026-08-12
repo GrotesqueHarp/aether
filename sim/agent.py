@@ -27,7 +27,7 @@ from .harness import Policy
 
 # facility build order per strategy: what a player would prioritize
 BUILD_ORDERS = {
-    "balanced": ["forge", "auto_feeder", "core_chamber", "playroom",
+    "balanced": ["waystation", "forge", "auto_feeder", "core_chamber", "playroom",
                  "bulwark", "hatchery_wing", "circuit", "cleansing_font", "aegis"],
     "training": ["forge", "core_chamber", "bulwark", "circuit",
                  "auto_feeder", "playroom", "cleansing_font", "aegis",
@@ -196,6 +196,7 @@ class PlayerPolicy(Policy):
         self.do_capture(sim)
         self.do_hatch(sim)
         self.do_build(sim)
+        self.do_expeditions(sim)
         self.do_assign(sim)
         self.do_ascend(sim)
         self.do_glyphs(sim)
@@ -304,6 +305,12 @@ class PlayerPolicy(Policy):
     def do_assign(self, sim):
         """Spare daemons harvest or train, per strategy."""
         roster = self._roster(sim)
+        # hold back enough for the expedition slots we own, or the capacity we
+        # just bought sits idle while every daemon works a shelf
+        reserve = min(len(roster) // 3, max(0, sim.bastion.expedition_slots()
+                                            - len(sim.db.list_expeditions())))
+        if reserve:
+            roster = roster[:-reserve] if len(roster) > reserve else []
         # With a small roster there is no such thing as a reserved fighter —
         # your one daemon has to earn its own egg money.
         pool = roster if len(roster) <= self.fighters else roster[self.fighters:]
@@ -581,19 +588,21 @@ class PlayerPolicy(Policy):
         # no way to earn the egg that would fix either.
         if len(sim.db.list_daemons()) < 2 or not free:
             return
+        slots = sim.bastion.expedition_slots()
         for dev in sim.db.list_devices():
-            if not self._budget():
+            if not self._budget() or len(sim.db.list_expeditions()) >= slots:
                 return
             mac = dev["mac"]
             prog = sim.db.get_progress(mac)
             if prog["cleared"] >= sim.world.LAYERS:
                 continue
-            if any(e["mac"] == mac for e in sim.db.list_expeditions()):
-                continue
             if not free:
                 return
-            d = free[-1]
-            if battle_odds(sim, [d], mac, prog["cleared"] + 1) > 0.55:
+            # send the strongest spare, not the weakest: an expedition is a
+            # solo fight at the frontier, so a leftover daemon simply fails the
+            # odds check and nothing is ever dispatched
+            d = free[0]
+            if battle_odds(sim, [d], mac, prog["cleared"] + 1) > 0.45:
                 st, _ = self._post(sim, "/api/expedition",
                                    {"daemon_id": d.id, "mac": mac})
                 if st == 200:

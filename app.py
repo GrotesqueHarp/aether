@@ -192,6 +192,7 @@ def state():
         "local_ip": scan.local_ipv4(),
         "subnet": (str(scan.local_subnet()) if scan.local_subnet() else None),
         "active_expeditions": len(db.list_expeditions()),
+        "expedition_slots": bastion.expedition_slots(),
     })
 
 

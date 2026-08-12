@@ -16,11 +16,34 @@ back.
 ## [Unreleased]
 
 ### Added
-- A steeper progression curve to match the years-long pacing. The award
-  thresholds assume it; against today's numbers they arrive early.
+- Retune award thresholds against the measured curve now that digging
+  accelerates (~660 layers in 35 days, and rising).
 - Teach the simulator about Ascension, Glyphs and Mastery — it currently
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
+
+## [0.19.0]
+
+### Added
+- **The Waystation.** Each level allows one more expedition to run at once,
+  network-wide, and several may now work the same rift. Costs 2.1x per level
+  with Cores from level 3.
+
+### Changed
+- Digging was **throughput-bound, not difficulty-bound**. Measurement showed
+  party power growing exponentially (x7.7 then x2.9 per week) while layers dug
+  *decelerated* from 13.4 to 10.4 a day — being 150x stronger dug no faster,
+  because expeditions were capped at one per rift and more rifts were gated
+  behind layers dug. Steepening enemy difficulty would only have made that
+  worse. The Waystation is the valve: capacity is what raw power now buys.
+- Over 35 days the curve now accelerates — 6.3 layers/day in week one, 14.4 in
+  week five — which is the shape a years-long game needs.
+
+### Fixed
+- The simulated player sent its **weakest** spare daemon on expeditions, which
+  then failed the frontier odds check, so nothing was ever dispatched: four
+  expedition slots sat empty while every daemon worked a shelf. It now reserves
+  daemons for the slots it owns and sends the strongest available.
 
 ## [0.18.2]
 

@@ -48,6 +48,12 @@ FACILITIES = {
         "desc": "Deep pressure conditioning. Gains HP.",
         "base_bits": 200,
     },
+    "waystation": {
+        "name": "The Waystation", "kind": "support", "essence": "volt",
+        "desc": "Somewhere for expeditions to stage from. Each level lets one "
+                "more party work the rifts you have already opened.",
+        "base_bits": 600,
+    },
     "array": {
         "name": "The Array", "kind": "support", "essence": "ferro",
         "desc": "A listening tower aimed at subspace. Each level resolves more "
@@ -86,6 +92,21 @@ HALLS = {k: v for k, v in FACILITIES.items() if v["kind"] == "hall"}
 
 
 # ----------------------------------------------------------------- levels ---
+WAYSTATION_COST_GROWTH = float(os.environ.get("AETHER_WAYSTATION_GROWTH", "2.1"))
+
+
+def expedition_slots() -> int:
+    """How many expeditions may run at once, network-wide.
+
+    Digging was throughput-bound rather than difficulty-bound: one expedition
+    per rift meant a party 150x stronger dug no faster, and more rifts were
+    gated behind layers dug — a loop feeding itself. This is the valve. Buying
+    capacity is how raw power turns into progress, and it gives a years-long
+    curve something to spend on that isn't another multiplier.
+    """
+    return 1 + db.facility_level("waystation")
+
+
 ARRAY_COST_GROWTH = float(os.environ.get("AETHER_ARRAY_COST_GROWTH", "2.35"))
 ARRAY_GATE_BASE = float(os.environ.get("AETHER_ARRAY_GATE_BASE", "55"))
 ARRAY_GATE_POWER = float(os.environ.get("AETHER_ARRAY_GATE_POWER", "2.05"))
@@ -115,6 +136,13 @@ def upgrade_cost(key: str, level: int) -> dict:
             cost["aethercite"] = float(level - 5)
         return cost
 
+    if key == "waystation":
+        c = {"bits": round(f["base_bits"] * (WAYSTATION_COST_GROWTH ** level), 1),
+             f"essence.{f['essence']}": round(f["base_bits"] / 6
+                                              * (WAYSTATION_COST_GROWTH ** level), 1)}
+        if level >= 2:
+            c["cores"] = float(round(3 * (1.5 ** (level - 2))))
+        return c
     cost = {"bits": round(f["base_bits"] * scale, 1),
             f"essence.{f['essence']}": round(f["base_bits"] / 8 * scale, 1)}
     if level >= 4:                      # cores join the bill at level 5+
@@ -195,6 +223,8 @@ def effect_line(key: str, lvl: int) -> str:
         extra = (f" · next needs {gate['need_layers']} layers dug "
                  f"({gate['have_layers']} so far)") if gate else ""
         return f"{array_capacity(lvl)} rifts resolvable{extra}"
+    if key == "waystation":
+        return f"{expedition_slots()} expedition(s) at once"
     if key == "hatchery_wing":
         return f"incubation ×{incubation_mult():.2f}"
     if key == "auto_feeder":
