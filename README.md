@@ -297,6 +297,24 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Awards and the Wardrobe (v0.18)
+
+Every other reward in AETHER is a multiplier, and multipliers dilute — the
+tenth x1.12 is invisible. Cosmetics don't. A palette earned at ten thousand
+layers reads as vividly in month thirty as month three, and it says what you
+did every time you look at it.
+
+Twenty-three awards across five axes: depth, breadth, time, care and rare
+feats. **Trinkets** are frequent and show their requirements, so they work as
+goals. **Landmarks** are rare and stay hidden behind `???` until earned, so
+they arrive as discoveries. Time-based awards always carry a second condition,
+so finding the game late doesn't dump a year of rewards at once.
+
+They come as six UI themes, four tank environments, five procedural
+decorations, three daemon adornments and a set of titles — chosen from the
+Wardrobe, never auto-applied. All of it **survives Reformat**: it's the record
+of everything the instance has ever done.
+
 ## Reformat (v0.17)
 
 The outermost loop, and the last of the four prestige systems. Fold the entire

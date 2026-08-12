@@ -306,6 +306,18 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .rf-keep{border-color:var(--online);color:var(--muted)}
 .rf-lose{border-color:var(--danger);color:var(--muted)}
 
+.wd{padding:13px 15px;cursor:default}
+.wd.earned{cursor:pointer;transition:.15s}
+.wd.earned:hover{border-color:var(--aether-dim)}
+.wd.on{border-color:var(--aether);background:rgba(139,124,246,.08)}
+.wd.locked{opacity:.45}
+.wd-n{font-weight:600;font-size:14px}
+.wd-d{font-size:12px;margin-top:3px;line-height:1.5}
+.wd-p{font-size:10.5px;color:var(--warn);margin-top:6px}
+.wd-on{font-size:10px;color:var(--aether);margin-top:7px;letter-spacing:.06em;text-transform:uppercase}
+.wd-swatch{display:flex;gap:4px;margin-top:8px}
+.wd-swatch i{width:20px;height:20px;border-radius:5px;border:1px solid rgba(255,255,255,.10)}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -427,6 +439,7 @@ body.dashmode .main{padding:0}
     <div class="navitem" data-view="bastion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 21V9l4-3 4 3 4-3 4 3v12"/><path d="M4 21h16M10 21v-5h4v5"/></svg>Bastion</div>
     <div class="navitem" data-view="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Pulse</div>
     <div class="navitem" data-view="compass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Compass<span id="cmp-dot" class="cl-dot" hidden></span></div>
+    <div class="navitem" data-view="wardrobe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l2.4 5.4 5.6.6-4.2 3.9 1.2 5.6L12 15.7 6.9 18.5l1.2-5.6L4 9l5.6-.6z"/></svg>Wardrobe<span id="wd-dot" class="cl-dot" hidden></span></div>
     <div class="navitem" data-view="records"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16"/><path d="M7 15l4-5 3 3 5-7"/></svg>Records</div>
     <div class="navitem" data-view="changelog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg>Changelog<span id="cl-dot" class="cl-dot" hidden></span></div>
     <div class="navitem" data-view="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Dashboard</div>
@@ -517,6 +530,7 @@ async function redrawView(){
     else if(state.view==='dash'){ await dashView(); }
     else if(state.view==='changelog'){ /* static; no redraw needed */ }
     else if(state.view==='records'){ /* sampled hourly; no need to chase it */ }
+    else if(state.view==='wardrobe'){ await wardrobeView(); }
     else if(state.view==='compass'){ await compassView(); }
   }catch(e){ /* transient failure: the next check will catch up */ }
   window.scrollTo(0,y);
@@ -584,6 +598,7 @@ async function boot(){
   renderResBar();
   // once per page load, never on the polling loop — /api/visit stamps the
   // "last seen" time, so calling it every 10s would mean you were never away
+  await loadCosmetics();
   checkChangelog();
   checkHomecoming();
   $('#foot-net').textContent=(st.local_ip||'')+(st.subnet? '\n'+st.subnet:'');
@@ -599,7 +614,7 @@ function go(v){
   // the dashboard isn't a normal view: it hides the chrome and owns the URL
   // hash, so route it through its own toggle rather than the view table
   if(v==='dash') return toggleDash();
-  state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView,records:recordsView,compass:compassView}[v]||scanView)();}
+  state.view=v;state.currentRift=null;setActive(v);({scan:scanView,nest:nestView,pulse:pulseView,bastion:bastionView,dash:dashView,changelog:changelogView,records:recordsView,compass:compassView,wardrobe:wardrobeView}[v]||scanView)();}
 
 /* -- first run: hatch the Anchor egg -- */
 function bootstrapView(){
@@ -1785,6 +1800,136 @@ function riftFlowFrame(){
   else FLOW.streams.clear();
 }
 
+
+/* -- the wardrobe: what you've earned, and what you're wearing -- */
+const KIND_LABEL={theme:'Themes',decor:'Tank decorations',adornment:'Daemon adornments',
+                  environment:'Environments',title:'Titles'};
+
+async function wardrobeView(){
+  $('#main').innerHTML=`<div class="topbar"><div><div class="eyebrow">Earned, over time</div><h1>Wardrobe</h1></div>
+    <div class="net" id="wd-count"></div></div><div id="wd"><div class="spin"></div></div>`;
+  const d=await api('/api/awards');
+  state.cosmetics=d.active||{};
+  $('#wd-count').textContent=`${d.counts.earned} of ${d.counts.total} earned · ${d.counts.landmarks} landmark(s)`;
+
+  const groups=['theme','environment','decor','adornment','title'];
+  $('#wd').innerHTML=groups.map(kind=>{
+    const items=d.awards.filter(a=>a.kind===kind);
+    if(!items.length)return '';
+    // titles and decor stack; themes and environments are one-at-a-time
+    const single=(kind==='theme'||kind==='environment');
+    return `<div class="section-title">${KIND_LABEL[kind]}</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
+        ${single&&items.some(i=>i.earned)?`<div class="card wd ${!state.cosmetics[kind]?'on':''}"
+            data-wear="${kind}" data-key=""><div class="wd-n">None</div>
+            <div class="wd-d muted">the original palette</div></div>`:''}
+        ${items.map(a=>{
+          const on=state.cosmetics[kind]===a.key||(!single&&state.cosmetics[kind+':'+a.key]);
+          if(!a.earned) return `<div class="card wd locked">
+            <div class="wd-n">${a.tier==='landmark'?'???':a.name}</div>
+            <div class="wd-d muted">${a.tier==='landmark'?'an unearned landmark':a.detail}</div>
+            ${a.progress?`<div class="mono wd-p">${a.progress}</div>`:''}</div>`;
+          return `<div class="card wd earned ${on?'on':''}" data-wear="${kind}" data-key="${a.key}">
+            <div class="wd-n">${a.name}${a.tier==='landmark'?' <span class="ltag gk">LANDMARK</span>':''}</div>
+            <div class="wd-d muted">${a.detail}</div>
+            ${kind==='theme'?`<div class="wd-swatch">${swatch(a.key)}</div>`:''}
+            <div class="mono wd-on">${on?'worn':'tap to wear'}</div></div>`;
+        }).join('')}
+      </div>`;}).join('');
+
+  $('#wd').querySelectorAll('[data-wear]').forEach(el=>el.onclick=async()=>{
+    const kind=el.dataset.wear, key=el.dataset.key||null;
+    const r=await api('/api/awards/wear',{method:'POST',body:JSON.stringify({kind,key})});
+    if(r.error||!r.ok){toast(r.reason||'Not earned yet');return;}
+    state.cosmetics=r.active||{};
+    applyTheme(state.cosmetics.theme);
+    toast(key?'Now wearing it':'Cleared');
+    wardrobeView();
+  });
+  const dot=$('#wd-dot'); if(dot) dot.hidden=true;
+}
+
+function swatch(key){
+  const t=THEMES[key]; if(!t)return '';
+  return ['--bg','--surface','--aether','--online','--warn'].map(v=>
+    `<i style="background:${t.vars[v]}"></i>`).join('');
+}
+
+/* ================= COSMETICS =================
+   Themes are variable sets, because the entire UI already reads its colour
+   from :root. Swapping a palette recolours everything at once — chrome,
+   charts, the Tank's own gradients — without a single component knowing a
+   theme exists.
+
+   The Tank reads these too, so a theme changes the water as well as the walls. */
+const THEMES = {
+  ferrous: { name:'Ferrous', vars:{
+    '--bg':'#151210','--surface':'#211C18','--surface2':'#2A231D','--hair':'#453629',
+    '--text':'#EDE3D6','--muted':'#B09880','--dim':'#7A6653',
+    '--aether':'#D98A45','--aether-dim':'#9c6231','--online':'#B9A94C',
+    '--warn':'#E8B54D','--danger':'#D9542F' }},
+  resonant: { name:'Resonant', vars:{
+    '--bg':'#0B1018','--surface':'#141B26','--surface2':'#1A2331','--hair':'#26364A',
+    '--text':'#DFF0E6','--muted':'#7FA894','--dim':'#4F7364',
+    '--aether':'#A78BFA','--aether-dim':'#7c5fd6','--online':'#40E0A0',
+    '--warn':'#D9E04D','--danger':'#F0714A' }},
+  long_dark: { name:'The Long Dark', vars:{
+    '--bg':'#05070B','--surface':'#0B0F16','--surface2':'#10161F','--hair':'#1A2330',
+    '--text':'#9FB0C4','--muted':'#5F7085','--dim':'#3E4C5D',
+    '--aether':'#5E6EA8','--aether-dim':'#414f7d','--online':'#3E8F6B',
+    '--warn':'#9C8642','--danger':'#8F4A38' }},
+  verdant: { name:'Verdant', vars:{
+    '--bg':'#0D1410','--surface':'#151F18','--surface2':'#1B281F','--hair':'#2A3B2E',
+    '--text':'#DFEBDD','--muted':'#8FAD92','--dim':'#5F7A63',
+    '--aether':'#7FBF6A','--aether-dim':'#5b9349','--online':'#4FD08A',
+    '--warn':'#D8C44D','--danger':'#D9714A' }},
+  year_one: { name:'Year One', vars:{
+    '--bg':'#0A1020','--surface':'#121B32','--surface2':'#18243F','--hair':'#2A3B5E',
+    '--text':'#F2E6C9','--muted':'#B0A379','--dim':'#7A7050',
+    '--aether':'#E0B34D','--aether-dim':'#b08a2f','--online':'#4FD0A8',
+    '--warn':'#F0C95C','--danger':'#E06A45' }},
+  mastered_one: { name:'Mastered', vars:{
+    '--bg':'#000000','--surface':'#0A0A0A','--surface2':'#121212','--hair':'#262626',
+    '--text':'#FFFFFF','--muted':'#9A9A9A','--dim':'#5E5E5E',
+    '--aether':'#FFFFFF','--aether-dim':'#a8a8a8','--online':'#D8D8D8',
+    '--warn':'#EDEDED','--danger':'#BFBFBF' }},
+};
+
+function applyTheme(key){
+  const root=document.documentElement;
+  // clear whatever the last theme set, so switching never leaves residue
+  for(const t of Object.values(THEMES))
+    for(const v of Object.keys(t.vars)) root.style.removeProperty(v);
+  const t=THEMES[key];
+  if(!t) return;
+  for(const [v,val] of Object.entries(t.vars)) root.style.setProperty(v,val);
+}
+
+/* Environments repaint the tank itself; decorations add things inside it. */
+const ENVIRONMENTS = {
+  the_deep:   { name:'The Deep',   top:'#04070E', bottom:'#01020A', motes:'#3A5A8A' },
+  the_choir:  { name:'The Choir',  top:'#160E24', bottom:'#07030F', motes:'#C08BF6' },
+  the_garden: { name:'The Garden', top:'#0F1A10', bottom:'#040A05', motes:'#7FD08A' },
+  folded:     { name:'Folded',     top:'#1A1020', bottom:'#05030A', motes:'#E8C84D' },
+};
+
+async function loadCosmetics(){
+  try{
+    const d = await api('/api/awards');
+    state.cosmetics = d.active || {};
+    state.awardCount = d.counts;
+    applyTheme(state.cosmetics.theme);
+    // loudly, as asked: a dot on the nav when something new has been earned
+    const seen = +(localStorage.getItem === undefined ? 0 : 0) || state._awardsSeen || 0;
+    if(d.counts && d.counts.earned > seen){
+      state._awardsSeen = d.counts.earned;
+      const dot = $('#wd-dot');
+      if(dot && seen > 0){ dot.hidden = false; toast('Something new is in the Wardrobe'); }
+      else if(dot && seen === 0 && d.counts.earned > 0){ dot.hidden = false; }
+    }
+  }catch(e){}
+}
+
 /* ================= THE TANK =================
    The Nest, as something to watch rather than read.
 
@@ -1888,6 +2033,14 @@ function tankFrame(){
   TANK.t += 1;
   ctx.clearRect(0,0,W,H);
 
+  // an earned environment repaints the water itself
+  const env = ENVIRONMENTS[(state.cosmetics||{}).environment];
+  if(env){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, env.top); g.addColorStop(1, env.bottom);
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  }
+
   // the tank tracks your clock: warm and bright at midday, cold after dark.
   // Purely atmospheric — nothing about the game changes with the hour.
   const hr = new Date().getHours() + new Date().getMinutes()/60;
@@ -1903,10 +2056,12 @@ function tankFrame(){
     if(m.y < -0.02){ m.y = 1.02; m.x = Math.random(); }
     ctx.beginPath();
     ctx.arc(m.x*W, m.y*H, m.r, 0, Math.PI*2);
-    ctx.fillStyle = `rgba(139,124,246,${m.a})`;
+    ctx.fillStyle = env ? env.motes + Math.round(m.a*255).toString(16).padStart(2,'0')
+                        : `rgba(139,124,246,${m.a})`;
     ctx.fill();
   }
 
+  drawDecor(ctx, W, H);
   for(const c of tankSync()) tankStep(c, W, H);
   for(const c of tankSync()) tankDraw(ctx, c, W, H);
 
@@ -1922,6 +2077,64 @@ function tankMood(d){
   if((c.corruption ?? 0) > 55)    return 'corrupted';
   if((c.happiness ?? 100) > 70 && (c.energy ?? 0) > 55) return 'playful';
   return 'idle';
+}
+
+/* Decorations are drawn behind the creatures and never move much — they are
+   scenery, not events. Each is procedural, like everything else here. */
+function drawDecor(ctx, W, H){
+  const worn = new Set(Object.values(state.cosmetics || {}));
+  const t = TANK.t;
+
+  if(worn.has('shaftlight')){
+    // a shaft of light from far above, drifting slowly
+    const x = W*0.5 + Math.sin(t/900)*W*0.16;
+    const g = ctx.createLinearGradient(x, 0, x, H);
+    g.addColorStop(0, 'rgba(232,200,77,.10)'); g.addColorStop(1, 'rgba(232,200,77,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x-26,0); ctx.lineTo(x+26,0);
+    ctx.lineTo(x+90,H); ctx.lineTo(x-90,H); ctx.closePath(); ctx.fill();
+  }
+  if(worn.has('deep_current')){
+    // slow horizontal banding, like water moving through
+    for(let i=0;i<3;i++){
+      const y = H*(0.25+i*0.25) + Math.sin(t/420 + i)*8;
+      ctx.beginPath(); ctx.moveTo(0,y);
+      for(let x=0;x<=W;x+=18) ctx.lineTo(x, y + Math.sin(x/90 + t/300 + i)*5);
+      ctx.strokeStyle = 'rgba(127,203,235,.09)'; ctx.lineWidth = 12; ctx.stroke();
+    }
+  }
+  if(worn.has('slow_water')){
+    for(let i=0;i<18;i++){
+      const seed = i*137.5;
+      const x = (seed % W), y = ((seed*1.7 + t*0.08) % H);
+      ctx.beginPath(); ctx.arc(x, H - y, 1.1 + (i%3)*0.5, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(220,227,238,.13)'; ctx.fill();
+    }
+  }
+  if(worn.has('the_nest_grows')){
+    // fronds rooted along the floor
+    for(let i=0;i<7;i++){
+      const x = W*(0.08+i*0.14), h = H*(0.16+((i*37)%5)*0.035);
+      ctx.beginPath(); ctx.moveTo(x, H);
+      for(let s=1;s<=5;s++){
+        const yy = H - (h*s/5);
+        ctx.lineTo(x + Math.sin(t/260 + i + s*0.5)*(s*2.4), yy);
+      }
+      ctx.strokeStyle = 'rgba(127,191,106,.30)';
+      ctx.lineWidth = 3.5 - i%2; ctx.lineCap='round'; ctx.stroke();
+    }
+  }
+  if(worn.has('constellation')){
+    // one star per rift you hold
+    const n = (state.devices||[]).length || 3;
+    for(let i=0;i<n;i++){
+      const a = (i/n)*Math.PI*2 + t/2600;
+      const x = W*0.5 + Math.cos(a)*W*0.33, y = H*0.42 + Math.sin(a)*H*0.26;
+      const tw = 0.5 + 0.5*Math.sin(t/40 + i*2);
+      ctx.beginPath(); ctx.arc(x, y, 1.6, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(240,235,255,${0.25+0.45*tw})`; ctx.fill();
+    }
+  }
 }
 
 function tankStep(c, W, H){
@@ -2066,6 +2279,31 @@ function tankDraw(ctx, c, W, H){
   ctx.ellipse(size*0.42, -size*0.12, size*0.15, size*0.15*open, 0, 0, Math.PI*2);
   ctx.fillStyle = '#0b1120'; ctx.fill();
 
+  // earned adornments — marks the creature carries, not effects it has
+  const worn = new Set(Object.values(state.cosmetics || {}));
+  if(worn.has('well_kept') && (care.hunger ?? 0) > 70 && (care.happiness ?? 0) > 70){
+    ctx.globalAlpha = alpha*0.30;
+    ctx.beginPath(); ctx.arc(0,0,size*1.35,0,Math.PI*2);
+    ctx.strokeStyle = '#FFF6D0'; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.globalAlpha = alpha;
+  }
+  if(worn.has('starlit') && (d.rarity||1) >= 5){
+    for(let i=0;i<5;i++){
+      const a = (i/5)*Math.PI*2 - c.phase*0.35;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a)*size*1.5, Math.sin(a)*size*1.0, 1.5, 0, Math.PI*2);
+      ctx.fillStyle = '#FFF3C4'; ctx.globalAlpha = alpha*0.85; ctx.fill();
+    }
+    ctx.globalAlpha = alpha;
+  }
+  if(worn.has('lineage') && (d.ascensions||0) > 0){
+    for(let i=0;i<Math.min(6, d.ascensions);i++){
+      ctx.beginPath();
+      ctx.arc(-size*(1.3 + i*0.34), Math.sin(c.phase - i*0.6)*size*0.3, 1.7, 0, Math.PI*2);
+      ctx.fillStyle = '#E8C84D'; ctx.globalAlpha = alpha*(0.7 - i*0.08); ctx.fill();
+    }
+    ctx.globalAlpha = alpha;
+  }
   // a poked daemon flares briefly — the whole point of poking
   if(c.poked > 0){
     ctx.globalAlpha = Math.min(0.5, c.poked / 30);

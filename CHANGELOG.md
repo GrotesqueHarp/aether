@@ -16,12 +16,28 @@ back.
 ## [Unreleased]
 
 ### Added
-- Theme palettes, tank decorations, adornments and environments — the awards
-  engine is in; the cosmetics themselves are not yet drawn.
-- A steeper progression curve to match the years-long pacing.
+- A steeper progression curve to match the years-long pacing. The award
+  thresholds assume it; against today's numbers they arrive early.
 - Teach the simulator about Ascension, Glyphs and Mastery — it currently
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
+
+## [0.18.1]
+
+### Added
+- **The cosmetics themselves.** Six theme palettes (Ferrous, Resonant, The Long
+  Dark, Verdant, Year One, Mastered) that recolour the entire interface —
+  chrome, charts and the Tank's own water — by swapping CSS variables, so no
+  component needs to know a theme exists.
+- Four **environments** that repaint the tank: The Deep, The Choir, The Garden,
+  Folded.
+- Five **tank decorations**, all procedural: Shaftlight falling from above,
+  Deep Current banding through the water, Slow Water motes, Fronds rooted along
+  the floor, and a Constellation with one star per rift you hold.
+- Three **daemon adornments**: Well-Kept haloes contented creatures, Starlit
+  circles five-star Megas, and Lineage trails a mark per ascension rank.
+- **The Wardrobe** — every award with its colour swatch, what's worn, and what
+  it takes to earn the rest. Trinkets show live progress; landmarks stay `???`.
 
 ## [0.18.0]
 
