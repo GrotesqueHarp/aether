@@ -22,6 +22,21 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.18.2]
+
+### Changed
+- **Creatures are drawn per stage.** Every stage previously shared one
+  silhouette — an ellipse with a single tapering sine tail — which at
+  Hatchling size read as something other than a creature. Now the shape itself
+  carries the stage: Hatchlings are compact and round with stubby paddles and
+  a crest, Rookies gain side fins and a swept tail, Champions become broad
+  rays with beating wings, Ultimates trail a mane of streamers, and Megas add
+  a crown of spines rooted along the back.
+- Rarity adds limbs on top of the stage silhouette rather than replacing it,
+  so a rare Rookie still reads as a Rookie.
+- Eyes gained a highlight and moved with the head; Eggs have none, since they
+  haven't opened one yet.
+
 ## [0.18.1]
 
 ### Added

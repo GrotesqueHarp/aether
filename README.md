@@ -310,6 +310,11 @@ goals. **Landmarks** are rare and stay hidden behind `???` until earned, so
 they arrive as discoveries. Time-based awards always carry a second condition,
 so finding the game late doesn't dump a year of rewards at once.
 
+Creatures are drawn per stage, so evolution is visible at a glance: compact
+round Hatchlings with paddles and a crest, finned Rookies, broad winged
+Champions, streamer-trailing Ultimates, and crowned Megas. Rarity adds limbs on
+top of that silhouette rather than replacing it.
+
 They come as six UI themes, four tank environments, five procedural
 decorations, three daemon adornments and a set of titles — chosen from the
 Wardrobe, never auto-applied. All of it **survives Reformat**: it's the record
