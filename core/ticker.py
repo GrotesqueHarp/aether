@@ -367,6 +367,7 @@ def tick_eggs(now: float | None = None):
             continue
         d = economy.hatch(egg)
         db.add_daemon(d)
+        db.bump_raised()
         db.hatch_egg_row(egg["id"])
         db.add_event("hatch",
                      f"An egg cracked open in the Nest — {d.name} "
@@ -401,6 +402,8 @@ def _run():
             war.tick_signal(now)
             war.tick_deadlines(now)
             sample_history(now)
+            from . import awards
+            awards.evaluate()
             if now - last_presence > PRESENCE_EVERY:
                 pass          # presence policing retired in v0.9
                 last_presence = now

@@ -98,6 +98,7 @@ class PlayerPolicy(Policy):
                  max_retries: int = 6, combat_share: float = 0.5,
                  strategy: str = "balanced",
                  use_expeditions: bool = True, use_crucible: bool = True,
+                 use_prestige: bool = True, glyph_quality: int = 3,
                  crucible_reserve: float = 0.6,
                  max_dig_per_session: int = 30,
                  overclock_lookahead: float = 0.5,
@@ -114,6 +115,8 @@ class PlayerPolicy(Policy):
         self.build_order = BUILD_ORDERS.get(strategy, BUILD_ORDERS["balanced"])
         self.use_expeditions = use_expeditions
         self.use_crucible = use_crucible
+        self.use_prestige = use_prestige
+        self.glyph_quality = glyph_quality
         self.crucible_reserve = crucible_reserve
         self.max_dig_per_session = max_dig_per_session
         self.overclock_lookahead = overclock_lookahead
@@ -194,6 +197,8 @@ class PlayerPolicy(Policy):
         self.do_hatch(sim)
         self.do_build(sim)
         self.do_assign(sim)
+        self.do_ascend(sim)
+        self.do_glyphs(sim)
         self.do_overclock(sim)
         self.do_retreat(sim)
         self.do_expeditions(sim)
@@ -334,7 +339,11 @@ class PlayerPolicy(Policy):
             for L in range(step, prog["cleared"] + 1, step):
                 if L not in taken:
                     open_nodes.append((prog["tier"], L, mac))
-        open_nodes.sort(reverse=True)
+        # prefer shelves on rifts we know well — mastery raises their yield
+        open_nodes.sort(key=lambda t: (
+            sim.mastery.level_from_xp(
+                sim.db.get_progress(t[2]).get("mastery_xp", 0)), t[0], t[1]),
+            reverse=True)
         for d in spare[:n_harvest]:
             if not open_nodes or not self._budget():
                 break
@@ -459,6 +468,65 @@ class PlayerPolicy(Policy):
                           f"roster={len(sim.db.list_daemons())}")
 
     # -- 6. the loop ---------------------------------------------------------
+    # -- prestige ------------------------------------------------------------
+    def do_ascend(self, sim):
+        """Rebirth anything that has capped out.
+
+        A player ascends the moment a daemon tops out, because the lineage
+        multiplier compounds and the levels come back quickly. Holding a maxed
+        daemon at Mega earns nothing it wasn't already earning.
+        """
+        if not self.use_prestige:
+            return
+        for d in sim.db.list_daemons():
+            if not self._budget() or not d.can_ascend():
+                continue
+            if sim.db.get_expedition(d.id):
+                continue
+            st, res = self._post(sim, f"/api/daemon/{d.id}/ascend", {})
+            if st == 200:
+                self.note(sim, "ascend", f"{d.name[:10]} -> rank {res.get('rank')}",
+                          f"pw {res.get('power_before')} -> {res.get('power_after')}")
+
+    def do_glyphs(self, sim):
+        """Craft for the job a daemon actually does, not for raw power.
+
+        Harvesters want yield, hall trainees want banking rate, fighters want
+        attack. Equipping a Forge glyph on a daemon that never fights is how a
+        naive agent would waste the whole Aethercite supply.
+        """
+        if not self.use_prestige or not self._budget():
+            return
+        wallet = sim.db.res_all()
+        # keep the roster's slots filled before striking anything new
+        spare = sim.db.list_glyphs(None)
+        for g in spare:
+            for d in sim.db.list_daemons():
+                if len(sim.db.list_glyphs(d.id)) < sim.glyph.slots_for(d):
+                    st, _ = self._post(sim, "/api/glyphs/equip",
+                                       {"glyph_id": g["id"], "daemon_id": d.id})
+                    if st == 200:
+                        self.note(sim, "glyph", f"fit {g['kind']} Q{g['quality']}",
+                                  d.name[:10])
+                    break
+
+        # a free slot somewhere justifies striking a new one
+        need = any(len(sim.db.list_glyphs(d.id)) < sim.glyph.slots_for(d)
+                   for d in sim.db.list_daemons())
+        if not need:
+            return
+        harvesters = len(sim.db.list_harvests())
+        trainees = len(sim.db.list_training())
+        kind = ("harvest" if harvesters >= trainees else "adept")
+        for q in range(self.glyph_quality, 0, -1):
+            cost = sim.glyph.craft_cost(kind, q)
+            if all(wallet.get(k, 0) >= v * 2 for k, v in cost.items()):
+                st, r = self._post(sim, "/api/glyphs/craft",
+                                   {"kind": kind, "quality": q})
+                if st == 200:
+                    self.note(sim, "glyph", f"struck {kind} Q{q}", r.get("desc", ""))
+                return
+
     def do_overclock(self, sim):
         for dev in sim.db.list_devices():
             if not self._budget():

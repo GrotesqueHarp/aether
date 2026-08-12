@@ -32,7 +32,8 @@ if REPO not in sys.path:
 # environment is set for a given run
 _GAME_MODULES = ["core.seed", "core.content", "core.daemon", "core.battle",
                  "core.world", "core.scan", "core.db", "core.economy",
-                 "core.bastion", "core.war", "core.ticker"]
+                 "core.bastion", "core.war", "core.ticker", "core.glyph",
+                 "core.mastery", "core.traits", "core.synergy"]
 
 
 class Policy:
@@ -96,6 +97,9 @@ class Sim:
         self.war = self.mod["war"]
         self.economy = self.mod["economy"]
         self.world = self.mod["world"]
+        self.glyph = self.mod["glyph"]
+        self.mastery = self.mod["mastery"]
+        self.traits = self.mod["traits"]
 
         self.db.init_db()
         if mock_lan:

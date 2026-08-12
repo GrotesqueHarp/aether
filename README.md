@@ -297,6 +297,26 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Reformat (v0.17)
+
+The outermost loop, and the last of the four prestige systems. Fold the entire
+run and begin again, keeping a permanent multiplier on everything the world
+produces.
+
+It's measured on what you **did** rather than what you're holding — layers dug,
+mastery levels earned, tiers pushed, lineage ranks raised — because measuring
+current resources would reward hoarding and punish spending. Each cycle asks
+1.6x more than the last, so folds space further and further apart.
+
+What comes through with you: your Aethercite, the Array's level, every layer
+you have ever dug, the Records history, and one daemon — returned to a
+Hatchling, but keeping its ascension rank and its traits. What's given back:
+the rest of the roster, all Bits, essence and Cores, every other facility, and
+all rift depth, tiers, wards and mastery.
+
+It is never required. The threshold is deliberately far out and the game is
+complete without ever touching it.
+
 ## The shaft in cross-section (v0.16.1)
 
 Beside the descent list sits a vertical cut through the whole rift — all 100

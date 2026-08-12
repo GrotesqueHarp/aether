@@ -301,6 +301,11 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .expbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .expbar select{background:#0c1220;color:var(--text);border:1px solid var(--hair);border-radius:7px;padding:7px 9px;font-size:12.5px}
 
+.rf-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:12px}
+.rf-keep,.rf-lose{font-size:12px;padding:4px 0;border-left:2px solid;padding-left:9px;margin-bottom:4px}
+.rf-keep{border-color:var(--online);color:var(--muted)}
+.rf-lose{border-color:var(--danger);color:var(--muted)}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -1104,8 +1109,10 @@ async function bastionView(){
     html+=`</div>`;
   }
   html+=`<div class="section-title">Glyphs</div><div id="glyphs"><div class="spin"></div></div>`;
+  html+=`<div class="section-title">Reformat</div><div id="reformat"><div class="spin"></div></div>`;
   $('#main').innerHTML=html;
   renderGlyphs();
+  renderReformat();
   $('#main').querySelectorAll('[data-upgrade]').forEach(btn=>btn.onclick=async()=>{
     const res=await api('/api/bastion/upgrade',{method:'POST',body:JSON.stringify({key:btn.dataset.upgrade})});
     if(!res.ok){toast(res.reason==='cant_afford'?'Not enough resources':'Cannot upgrade');return;}
@@ -1125,6 +1132,58 @@ async function bastionView(){
 }
 
 /* -- glyphs: craftable equipment -- */
+async function renderReformat(){
+  const host=$('#reformat'); if(!host)return;
+  const d=await api('/api/reformat');
+  const s=d.score;
+  host.innerHTML=`<div class="card" style="padding:16px 18px;max-width:760px;${d.ready?'border-color:var(--warn)':''}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <b style="${d.ready?'color:var(--warn)':''}">${d.cycles?`Cycle ${d.cycles} · everything yields ×${d.current_mult}`:'The outermost loop'}</b>
+      <span class="mono muted" style="font-size:11.5px">${fmt(s.total)} / ${fmt(d.threshold)}</span>
+    </div>
+    <div class="mast-bar" style="margin:9px 0"><i style="width:${d.pct}%"></i></div>
+    <div class="muted" style="font-size:12.5px;line-height:1.6">
+      Fold the whole run and begin again, keeping a permanent ×${d.next_mult} on everything
+      the world produces. Measured on what you <i>did</i> — ${fmt(s.layers)} layers dug,
+      ${s.mastery} mastery levels, ${s.tiers} tier(s), ${s.ranks} lineage rank(s).
+      Nothing here is required; the game is complete without ever folding.
+    </div>
+    <div class="rf-cols">
+      <div><div class="dash-h">Carried through</div>${d.keeps.map(k=>`<div class="rf-keep">${k}</div>`).join('')}</div>
+      <div><div class="dash-h">Given back</div>${d.loses.map(k=>`<div class="rf-lose">${k}</div>`).join('')}</div>
+    </div>
+    ${d.ready?`<button class="btn" style="border-color:var(--warn);color:var(--warn);margin-top:12px" id="do-reformat">Reformat →  cycle ${d.cycles+1}</button>`
+             :`<div class="mono muted" style="font-size:11px;margin-top:10px">${(100-d.pct).toFixed(1)}% still to go</div>`}
+  </div>`;
+  const btn=$('#do-reformat'); if(!btn)return;
+  btn.onclick=()=>{
+    modal(`<div class="card reset-modal" style="padding:22px;max-width:470px">
+      <h2 style="font-size:19px;margin-bottom:8px;color:var(--warn)">Fold the aether?</h2>
+      <div class="muted" style="font-size:13px;line-height:1.6;margin-bottom:14px">
+        Everything above is given back. One daemon — your deepest lineage — comes through
+        as a Hatchling, keeping its rank and traits. Your Aethercite, your Array, and every
+        layer you have ever dug remain.<br><br>
+        From here on the world yields <b>×${d.next_mult}</b>, permanently.
+      </div>
+      <div class="mono muted" style="font-size:11px">Type REFORMAT to confirm:</div>
+      <input id="rf-word" placeholder="REFORMAT" autocomplete="off" spellcheck="false">
+      <div style="display:flex;gap:9px">
+        <button class="btn" onclick="closeModal()">Not yet</button>
+        <button class="btn" style="border-color:var(--warn);color:var(--warn)" id="rf-go">Fold</button>
+      </div></div>`);
+    $('#rf-word').focus();
+    $('#rf-go').onclick=async()=>{
+      if($('#rf-word').value.trim()!=='REFORMAT'){toast('Type REFORMAT to confirm');return;}
+      const r=await api('/api/reformat/commit',{method:'POST',body:JSON.stringify({confirm:'REFORMAT'})});
+      closeModal();
+      if(r.error||!r.ok){toast(r.message||r.reason||'Cannot reformat yet');return;}
+      toast(`Cycle ${r.cycles} begins — everything yields ×${r.mult}`);
+      state.party=[]; state.currentRift=null;
+      await boot();
+    };
+  };
+}
+
 async function renderGlyphs(){
   const host=$('#glyphs'); if(!host)return;
   const g=await api('/api/glyphs');

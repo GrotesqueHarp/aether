@@ -38,6 +38,8 @@ from core import daemon as daemon_mod
 from core import glyph as glyph_mod
 from core import mastery
 from core import synergy
+from core import reformat
+from core import awards
 from core import objectives as objectives_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
@@ -199,6 +201,7 @@ def bootstrap():
         return jsonify({"error": "already_bootstrapped"}), 400
     d = starter_daemon()
     db.add_daemon(d)
+    db.bump_raised()
     db.set_meta("bootstrapped", "1")
     db.set_meta("last_tick", str(time.time()))
     db.add_event("hatch", f"{d.name} hatched from the Anchor egg. "
@@ -592,6 +595,7 @@ def capture():
     wild = world_mod.capture_daemon(r["mac"], milestone, prog["tier"])
     wild.id = None
     db.add_daemon(wild)
+    db.bump_raised()
     db.set_progress_fields(r["mac"], captures_taken=milestone)
     db.add_event("capture",
                  f"{wild.name} was drawn out of {r['world_name']} at layer "
@@ -750,6 +754,43 @@ def party_synergy():
     party = [d for d in (db.get_daemon(int(i)) for i in (b.get("daemon_ids") or []))
              if d]
     return jsonify({"synergies": synergy.evaluate(party)})
+
+
+# -- awards & cosmetics --
+@app.route("/api/awards")
+def awards_state():
+    awards.evaluate()          # cheap, and keeps the view honest on load
+    return jsonify(awards.state())
+
+
+@app.route("/api/awards/wear", methods=["POST"])
+def awards_wear():
+    b = request.get_json(force=True, silent=True) or {}
+    res = awards.set_active(b.get("kind", ""), b.get("key") or None)
+    return jsonify(res) if res.get("ok") else (jsonify(res), 400)
+
+
+# -- reformat --
+@app.route("/api/reformat")
+def reformat_status():
+    return jsonify(reformat.status())
+
+
+@app.route("/api/reformat/commit", methods=["POST"])
+def reformat_commit():
+    b = request.get_json(force=True, silent=True) or {}
+    if b.get("confirm") != "REFORMAT":
+        return jsonify({"error": "not_confirmed",
+                        "message": 'Send {"confirm": "REFORMAT"} to proceed.'}), 400
+    res = reformat.reformat(b.get("keep_daemon_id"))
+    if not res.get("ok"):
+        return jsonify(res), 400
+    ticker.reset_clocks()
+    db.add_event("reformat",
+                 f"The aether was folded. Cycle {res['cycles']} begins — "
+                 f"{res['carried']['name']} carried through, and every rift "
+                 f"yields x{res['mult']} from here on.")
+    return jsonify(res)
 
 
 # -- glyphs --
@@ -956,6 +997,7 @@ def reset():
     cleared = db.reset_all(keep_devices=(scope == "progress"))
     ticker.reset_clocks()
     db.add_daemon(starter_daemon())
+    db.bump_raised()
     db.set_meta("bootstrapped", "1")
     db.add_event("reset", "The aether was reformatted. Everything begins again.")
     return jsonify({"ok": True, "scope": scope, "cleared": cleared,

@@ -16,12 +16,59 @@ back.
 ## [Unreleased]
 
 ### Added
-- Teach the simulator about Ascension, Glyphs, Traits and Mastery — it
-  currently measures a game without them.
-- Reformat: global prestige. Needs the above first.
+- Theme palettes, tank decorations, adornments and environments — the awards
+  engine is in; the cosmetics themselves are not yet drawn.
+- A steeper progression curve to match the years-long pacing.
 - Teach the simulator about Ascension, Glyphs and Mastery — it currently
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
+
+## [0.18.0]
+
+### Added
+- **Awards**, the substrate for long-run rewards. Every other reward here is a
+  multiplier, and multipliers dilute: the tenth x1.12 is invisible. Cosmetics
+  don't — a palette earned at ten thousand layers reads exactly as vividly in
+  month thirty as month three, and it says what you did every time you see it.
+- Twenty-three awards across five earning axes: depth, breadth, time, care and
+  rare feats. Two tiers — **trinkets** are frequent and show their requirements
+  as goals; **landmarks** are rare and stay hidden behind `???` until earned,
+  so they read as discoveries.
+- Time-based awards always carry a second condition, so someone who finds the
+  game late doesn't receive a year of backlogged rewards at once.
+- Awards and worn cosmetics **survive Reformat** — they're the record of
+  everything the instance has ever done. `daemons_raised`, `layers_dug` and the
+  instance's birthday now survive resets for the same reason.
+- Nothing auto-applies: `POST /api/awards/wear` puts something on, and the
+  engine refuses anything unearned.
+
+## [0.17.0]
+
+### Added
+- **Reformat**, the fourth and outermost prestige loop. Fold the whole run and
+  begin again with a permanent multiplier on everything the world produces.
+  Measured on what you *did* — layers dug, mastery earned, tiers pushed,
+  lineage ranks — rather than what you happen to be holding, so it rewards
+  using the economy instead of hoarding it. Each cycle asks 1.6x more than the
+  last. It is never required; the game is complete without ever folding.
+- What survives a fold is chosen so it reads as carrying something forward
+  rather than starting over: Aethercite, the Array's level, every lifetime
+  layer dug, the Records history, and one daemon of your choosing — returned
+  to a Hatchling but keeping its lineage rank and traits.
+- Knobs: `AETHER_REFORMAT_THRESHOLD`, `AETHER_REFORMAT_GAIN`,
+  `AETHER_REFORMAT_SCALE`.
+
+### Changed
+- **The simulator can see the whole game.** Its agent now ascends daemons at
+  the cap, strikes and fits glyphs by the job a daemon actually does, and
+  weighs rift mastery when choosing where to post harvesters. It was measuring
+  a game without four of its systems: with prestige enabled, 21-day party power
+  reads 37,648 against the 10,559 it previously reported, and the first
+  Overclock lands on day 16 rather than never.
+
+### Fixed
+- Two function declarations in the UI were left as `async async function` and
+  a bare `function` by an edit that split an anchor, breaking the whole script.
 
 ## [0.16.1]
 

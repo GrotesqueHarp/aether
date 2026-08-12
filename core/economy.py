@@ -53,7 +53,8 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     mult = (ECON_MULT * (DORMANT_RATE_MULT if dormant else 1.0)
             * war.tier_mults(progress)["yields"])
 
-    from . import glyph, mastery, traits
+    from . import glyph, mastery, traits, reformat
+    mult *= reformat.echo_mult()
     mult *= 1.0 + glyph.bonus(getattr(daemon, "equipped", []), "harvest")
     mult *= traits.harvest_mult(daemon)
     mult *= mastery.yield_mult(progress.get("mastery_xp", 0))
@@ -108,6 +109,8 @@ def node_loot(rift: dict, node_index: int, dormant: bool,
     # Clearing a layer is progress, not payday. Battle drops are a trickle to
     # get you started; the real economy is a daemon posted on a shelf pulling
     # resources in around the clock whether you're watching or not.
+    from . import reformat
+    mult *= reformat.echo_mult()
     loot = {"bits": round((3 + lvl * 0.7) * mult * LOOT_MULT, 1),
             f"essence.{essence_kind}": round((0.5 + lvl * 0.15) * mult * LOOT_MULT, 1)}
     if is_gatekeeper(layer):

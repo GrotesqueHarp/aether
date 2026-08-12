@@ -292,6 +292,11 @@ def _run_migrations():
 
 
 # --- daemons ----------------------------------------------------------------
+def bump_raised(n: int = 1):
+    cur = float(get_meta("daemons_raised", "0") or 0)
+    set_meta("daemons_raised", str(cur + n))
+
+
 def add_daemon(d: Daemon) -> int:
     with _conn() as c:
         cur = c.execute(
@@ -883,8 +888,13 @@ def reset_all(keep_devices: bool = True) -> dict:
         else:
             # a fresh save shouldn't inherit stale presence state
             c.execute("UPDATE devices SET online = 1")
-        # keep schema_version; drop everything else, clocks included
-        c.execute("DELETE FROM meta WHERE key != 'schema_version'")
+        # Awards, the cosmetics you're wearing, lifetime counts and the
+        # instance's birthday all survive a wipe: they're the record of
+        # everything this instance has ever done, and folding a run shouldn't
+        # erase your own history.
+        c.execute("DELETE FROM meta WHERE key NOT IN "
+                  "('schema_version','awards','cosmetics','daemons_raised',"
+                  " 'instance_started','reformat_cycles','layers_dug')")
     return counts
 
 
