@@ -22,6 +22,22 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.23.1]
+
+### Fixed
+- **The Shallows looked broken.** It reported only completed levels, so a slow
+  pool showed `+0 levels · 0h` for an hour at a time while XP accumulated
+  invisibly. Occupants now show their level, exact XP toward the next one, the
+  hourly rate, a filling bar and an estimate — so it is visibly working even
+  when nothing has finished.
+- It was accidentally **upgradeable for nothing**, since its base cost is zero.
+  A free fixture shouldn't be for sale: `upgrade_cost` returns nothing for it,
+  the endpoint refuses, and the button is replaced with "no upkeep, no
+  upgrades — it simply is".
+- Its occupant list never rendered at all, because the whole block was gated on
+  a facility level above zero and the Shallows is level-less by design.
+- It read **UNBUILT** and rendered dimmed. It now reads **OPEN**.
+
 ## [0.23.0]
 
 ### Changed

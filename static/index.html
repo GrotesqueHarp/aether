@@ -339,6 +339,10 @@ body.dragging-daemon{cursor:grabbing}
 
 .efflvl{font-family:var(--mono);font-size:10px;color:var(--warn);margin-left:5px}
 
+.occbar{height:4px;background:#0c1220;border-radius:2px;overflow:hidden;margin:4px 0 2px}
+.occbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--aether-dim),var(--aether));transition:width .6s}
+.occeta{font-size:10px;color:var(--dim)}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -1125,13 +1129,15 @@ async function bastionView(){
       const cost=Object.entries(f.next_cost).map(([k,v])=>`${fmt(v)} ${k.replace('essence.','')}`).join(' + ');
       const affordable=Object.entries(f.next_cost).every(([k,v])=>(state.res[k]||0)>=v);
       let occHtml='';
-      if(f.kind==='hall'&&f.level>0){
+      if(f.kind==='hall'&&(f.level>0||key==='crucible_tank')){   // the Shallows is level-less
         if(f.occupants.length){
           occHtml += `<canvas class="minitank" data-mini="hall:${key}"
             data-ids="${f.occupants.map(o=>o.daemon_id).join(',')}"
             data-stat="${f.stat}"></canvas>`;
         }
-        occHtml+=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat?f.stat.toUpperCase():'levels'} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
+        occHtml+=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">${o.pct!==undefined
+            ? `Lv${o.level} · ${Math.round(o.xp)}/${o.xp_needed} xp · +${o.per_hour}/h`
+            : `+${o.gained} ${f.stat?f.stat.toUpperCase():'levels'} · ${o.hours}h`}</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>${o.pct!==undefined?`<div class="occbar" title="${o.eta_hours}h to level ${o.level+1}"><i style="width:${Math.max(1.5,o.pct)}%"></i></div><div class="occeta mono">next level in ~${o.eta_hours<1?Math.round(o.eta_hours*60)+'m':Math.round(o.eta_hours)+'h'}${o.gained?` · ${o.gained} gained here`:''}</div>`:''}`).join('');
         const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);  // expeditions ARE exclusive
         if(f.occupants.length<f.slots&&free.length){
           occHtml+=`<select data-enroll="${key}" data-drop="hall:${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name}${f.stat?` · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}`:` · Lv${d.level}`}</option>`).join('')}</select>`;
@@ -1139,15 +1145,15 @@ async function bastionView(){
           occHtml+=`<div class="muted mono" style="font-size:10.5px">${f.occupants.length}/${f.slots} slots — full</div>`;
         }
       }
-      html+=`<div class="card fac ${f.level===0?'unbuilt':''}" data-fac="${key}">
-        <div class="fhead"><h3>${f.name}</h3><span class="flevel">${f.level===0?'UNBUILT':'LV '+f.level}</span></div>
+      html+=`<div class="card fac ${(f.level===0&&key!=='crucible_tank')?'unbuilt':''}" data-fac="${key}">
+        <div class="fhead"><h3>${f.name}</h3><span class="flevel">${key==='crucible_tank'?'OPEN':(f.level===0?'UNBUILT':'LV '+f.level)}</span></div>
         <div class="fdesc">${f.desc}</div>
         <div class="feffect">${f.effect}</div>
         ${f.gate?`<div class="mono" style="font-size:10.5px;color:var(--warn)">locked · dig ${fmt(f.gate.need_layers)} layers network-wide (${fmt(f.gate.have_layers)} so far)</div>`:''}
         ${occHtml}
         <div style="display:flex;align-items:center;gap:10px;margin-top:auto">
-          <button class="btn ${f.level===0?'primary':''}" data-upgrade="${key}" ${affordable?'':'disabled'}>${f.level===0?'Build':'Upgrade'}</button>
-          <span class="fcost">${cost}</span>
+          ${Object.keys(f.next_cost||{}).length?`<button class="btn ${f.level===0?'primary':''}" data-upgrade="${key}" ${affordable?'':'disabled'}>${f.level===0?'Build':'Upgrade'}</button>
+          <span class="fcost">${cost}</span>`:'<span class="fcost">no upkeep, no upgrades — it simply is</span>'}
         </div></div>`;
     }
     html+=`</div>`;

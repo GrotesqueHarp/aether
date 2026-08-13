@@ -128,6 +128,8 @@ def array_capacity(level: int) -> int:
 
 def upgrade_cost(key: str, level: int) -> dict:
     f = FACILITIES[key]
+    if key == "crucible_tank":
+        return {}                      # free, fixed, and not for sale
     scale = 1.55 ** level
     if key == "array":
         # Bits-only for the first few levels: the Array is how you reach the
@@ -177,6 +179,8 @@ def array_gate(level: int) -> dict | None:
 def upgrade(key: str) -> dict:
     if key not in FACILITIES:
         return {"ok": False, "reason": "bad_facility"}
+    if key == "crucible_tank":
+        return {"ok": False, "reason": "not_upgradeable"}
     lvl = db.facility_level(key)
     if key == "array":
         gate = array_gate(lvl)
@@ -209,12 +213,30 @@ def snapshot() -> dict:
             for t in db.list_training(key):
                 d = db.get_daemon(t["daemon_id"])
                 if d:
-                    out[key]["occupants"].append({
+                    occ = {
                         "daemon_id": d.id, "name": d.name,
                         "color": d.to_dict()["color"],
                         "gained": t["gained"],
                         "hours": round((time.time() - t["started"]) / 3600, 1),
-                    })
+                    }
+                    # A slow pool that reports only whole levels reads as broken
+                    # for hours at a time. Show the level it is working toward,
+                    # how far into it, and the rate — so it is visibly ticking
+                    # even when nothing has completed yet.
+                    if key == "crucible_tank":
+                        need = max(1, d.xp_to_next())
+                        occ["level"] = d.level
+                        occ["xp"] = d.xp
+                        occ["xp_needed"] = need
+                        occ["pct"] = round(100.0 * d.xp / need, 1)
+                        occ["per_hour"] = round(shallows_level_of(d), 1)
+                        hrs = (need - d.xp) / max(0.01, shallows_level_of(d))
+                        occ["eta_hours"] = round(hrs, 1)
+                    else:
+                        occ["per_hour"] = round(
+                            hall_rate(lvl, d) * d.training_headroom(), 2)
+                        occ["banked"] = round(t["banked"], 2)
+                    out[key]["occupants"].append(occ)
     return out
 
 
