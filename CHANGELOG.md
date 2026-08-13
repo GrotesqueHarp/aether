@@ -22,6 +22,25 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.22.0]
+
+### Changed
+- **Rarity drives growth.** Per-level gain was `1.4 + random()*2.6 +
+  rarity*0.3` — the random term spanned 2.6 while rarity contributed 1.2 across
+  the entire 1-5 range, so a common could comfortably out-grow a legendary and
+  rarity barely mattered. Growth is now set by rarity outright: 3.2 per level
+  at 1 star rising to 7.0 at 5, in every stat, with the roll only tilting the
+  shape slightly. At level 40 that separates a 2-star (1,118 total stats) from
+  a 5-star (1,839).
+- **Training is a supplement, not a second levelling track.** Trained growth
+  now tapers past roughly a third of a daemon's own level: a level-30 daemon
+  absorbs about ten levels' worth comfortably, and beyond that both clicks and
+  halls yield sharply less. A hall tops a daemon up for a floor slightly beyond
+  it, then stops mattering until you level it further — which is what training
+  is for.
+- Cards show **trained out** when a daemon has taken about as much training as
+  its level allows.
+
 ## [0.21.1]
 
 ### Fixed

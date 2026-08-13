@@ -29,6 +29,17 @@ CARE_DEFAULTS = {
     "weight": 20,      # affects SPD; overfeeding raises it
 }
 
+# Levelling is the main engine of growth, and rarity is what decides how fast
+# it turns. A 5-star gains roughly twice a 1-star per level, every level, in
+# every stat — which is what makes a rare daemon worth raising rather than
+# merely worth more when sold.
+GROWTH_BY_RARITY = {1: 3.2, 2: 4.0, 3: 4.9, 4: 5.9, 5: 7.0}
+
+# Trained growth worth this fraction of a daemon's level before it tapers. A
+# Lv30 daemon absorbs about ten levels' worth comfortably; past that, training
+# yields sharply less, so levelling stays the way to make a daemon strong.
+TRAIN_CAP_FRACTION = float(os.environ.get("AETHER_TRAIN_CAP", "0.35"))
+
 # --- ascension tuning -------------------------------------------------------
 # Compounding per rank, so lineage keeps pace with tier scaling rather than
 # falling behind it. 1.18 gives ~2.3x by rank 5 and ~5x by rank 10.
@@ -130,6 +141,20 @@ class Daemon:
 
     def battle_stats(self) -> dict:
         return {k: self.stat(k) for k in STAT_KEYS}
+
+    def training_headroom(self) -> float:
+        """How much more training this daemon will still take, 1.0 to 0.
+
+        Training is a supplement, not a second levelling track: it exists to
+        top a daemon up for a floor slightly beyond it. Past roughly a third of
+        its own level in trained growth, further training yields sharply less,
+        so the way to make a daemon strong stays levelling it.
+        """
+        grow = sum(self.growth.values()) or 1.0
+        trained_levels = sum((self.trained or {}).values()) / grow
+        cap = max(2.0, self.level * TRAIN_CAP_FRACTION)
+        over = trained_levels / cap
+        return 1.0 if over <= 1 else max(0.06, 1.0 / (1.0 + (over - 1) * 3.0))
 
     def effective_level(self) -> int:
         """What its stats are worth, expressed in levels.
@@ -269,7 +294,7 @@ class Daemon:
             return {"ok": False, "reason": "too_tired"}
         # a quarter of a level's growth, so a click means the same thing to a
         # weak daemon as to a strong one
-        gain = max(1, round(self.growth[stat] * 0.25))
+        gain = max(1, round(self.growth[stat] * 0.25 * self.training_headroom()))
         self.base_stats[stat] += gain
         self.trained[stat] = self.trained.get(stat, 0) + gain
         self.care["energy"] -= TRAIN_ENERGY_COST
@@ -293,6 +318,7 @@ class Daemon:
         from . import glyph, traits
         d["traits"] = traits.describe(self)
         d["effective_level"] = self.effective_level()
+        d["training_headroom"] = round(self.training_headroom(), 2)
         d["display_name"] = self.given_name or self.name
         d["given_name"] = self.given_name
         d["bio"] = {"born": self.born, "origin_layer": self.origin_layer,
@@ -340,7 +366,16 @@ def generate_daemon(rng: Rng, *, origin_mac: str = "",
         else:
             base_stats[k] = int(8 + budget * share * 0.9)
 
-    growth = {k: round(1.4 + rng.random() * 2.6 + rarity * 0.3, 2) for k in STAT_KEYS}
+    # Growth is RARITY's job. It used to be `1.4 + random()*2.6 + rarity*0.3`,
+    # where the random term spanned 2.6 while rarity contributed 1.2 across the
+    # whole 1-5 range — so a common could comfortably out-grow a legendary and
+    # rarity meant almost nothing. Now rarity sets the rate and the roll only
+    # tilts the shape: every stat still grows every level, but a daemon can
+    # lean a little toward what it's built for.
+    rate = GROWTH_BY_RARITY[max(1, min(5, rarity))]
+    tilt = {k: 0.85 + rng.random() * 0.30 for k in STAT_KEYS}
+    mean = sum(tilt.values()) / len(tilt)
+    growth = {k: round(rate * tilt[k] / mean, 2) for k in STAT_KEYS}
     sigil = _roll_sigil(rng)
     seed_id = _digest(origin_mac, str(rng.random()), element, attribute).hex()[:16]
 

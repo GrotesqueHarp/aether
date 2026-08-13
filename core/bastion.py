@@ -316,6 +316,7 @@ def tick_training(now: float | None = None):
         rate *= traits.mult(d, "training")
         from . import affinity
         rate *= affinity.job_mult(d, "training")
+        rate *= d.training_headroom()
         banked = t["banked"] + rate * hours
         whole = int(banked)
         if whole > 0:

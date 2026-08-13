@@ -297,6 +297,21 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Growth and training (v0.22)
+
+**Levelling is the engine, and rarity decides how fast it turns.** Every level
+raises every stat, at a rate set by rarity alone — 3.2 per level at one star
+rising to 7.0 at five. That's what makes a rare daemon worth *raising* rather
+than merely worth more when sold.
+
+**Training supplements it.** Halls and click-training top a daemon up for a
+floor slightly beyond its level, but taper hard past about a third of its level
+in trained growth. The way to make a daemon strong is to level it; the way to
+get it over one difficult layer this week is to train it.
+
+Daemons show an effective level (`Lv30 ≈38`) when training has raised them, and
+read **trained out** once they've absorbed as much as their level allows.
+
 ## Names, histories and presence (v0.21)
 
 Daemons can be **named** — click the name on its card. It keeps the name it was

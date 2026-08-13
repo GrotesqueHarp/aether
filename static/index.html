@@ -1416,7 +1416,7 @@ function confirmSell(d){
   const val=Object.entries(d.sell_value||{}).map(([k,v])=>`${fmt(v)} ${k.replace('essence.','')}`).join(' · ');
   modal(`<div class="card" style="padding:22px;max-width:430px">
     <h2 style="font-size:19px;margin-bottom:8px">Release ${d.name}?</h2>
-    <div class="muted" style="font-size:13px;margin-bottom:14px">${'★'.repeat(d.rarity)} ${d.stage} · Lv${d.level}${(d.effective_level>d.level)?`<span class="efflvl" title="stats worth of a level-${d.effective_level} daemon, thanks to training">≈${d.effective_level}</span>`:''} · pw${d.power}<br>This is permanent. You'll receive:</div>
+    <div class="muted" style="font-size:13px;margin-bottom:14px">${'★'.repeat(d.rarity)} ${d.stage} · Lv${d.level}${(d.training_headroom!==undefined&&d.training_headroom<0.6)?`<span class="efflvl" style="color:var(--dim)" title="trained about as far as this level allows — level it up to make training count again">trained out</span>`:''}${(d.effective_level>d.level)?`<span class="efflvl" title="stats worth of a level-${d.effective_level} daemon, thanks to training">≈${d.effective_level}</span>`:''} · pw${d.power}<br>This is permanent. You'll receive:</div>
     <div class="mono" style="color:var(--online);font-size:13px;margin-bottom:18px">${val||'nothing'}</div>
     <div style="display:flex;gap:9px">
       <button class="btn" onclick="closeModal()">Keep</button>
