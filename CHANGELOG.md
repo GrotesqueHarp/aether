@@ -22,6 +22,41 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.23.0]
+
+### Changed
+- **Levels now decide fights.** A fresh daemon carried 278 stat points while a
+  level added only 16 — so every Lv1 arrived with seventeen levels of free head
+  start built in, an eleven-level gap was worth just 1.6x power, and a Lv6
+  could beat a Lv17. Starting stats are now about a third of what they were,
+  so levelling carries the weight. Measured across 100 simulated fights per
+  pairing, the lower level now wins **0%** of Lv6-vs-Lv17, Lv10-vs-Lv20 and
+  Lv20-vs-Lv30 matchups.
+
+### Added
+- **The Shallows.** A free training pool, available from the very start with no
+  building required and two slots. It grants XP rather than stat points, so it
+  *levels* a daemon properly instead of inflating it, and it tapers as they
+  outgrow it — 622 XP/day at Lv1, 105 at Lv40. A fresh capture left alone
+  reaches Lv6 in a day, Lv12 in a week, Lv18 in a month. Slow, permanent, and
+  the way new arrivals catch up with an established roster.
+
+### Fixed
+- Three UI crashes and one payload error from facilities that train no
+  particular stat.
+
+## [0.22.1]
+
+### Fixed
+- **"Wipe the instance" didn't.** Awards, worn cosmetics, Reformat cycles and
+  the lifetime counters are deliberately kept through a Reformat — they're the
+  record of what the instance has done — but the full-wipe scope inherited that
+  behaviour despite promising "exactly like first boot". A fresh start would
+  have begun with earned awards already unlocked and a Reformat multiplier
+  silently applied. The `everything` scope now clears them; `progress` and
+  `rifts` still keep them, and Reformat is unaffected.
+- The reset dialog now says exactly what the full wipe takes.
+
 ## [0.22.0]
 
 ### Changed

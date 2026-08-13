@@ -354,17 +354,22 @@ def generate_daemon(rng: Rng, *, origin_mac: str = "",
     rarity = max(min_rarity, rng.weighted(
         [(1, 46), (2, 28), (3, 16), (4, 8), (5, 2)]))
 
-    # base stats scale gently with rarity; each daemon has a "shape"
-    budget = 130 + rarity * 22
+    # Base stats are a small head start, not the bulk of a daemon.
+    #
+    # They used to total ~278 while a level added ~16, so a fresh Lv1 arrived
+    # with seventeen levels already built in and an eleven-level gap was worth
+    # only 1.6x power — which is how a Lv6 could beat a Lv17. The budget is now
+    # about a third of what it was, so levels carry the weight instead.
+    budget = 44 + rarity * 9
     weights = [rng.random() + 0.35 for _ in STAT_KEYS]
     tot = sum(weights)
     base_stats = {}
     for k, w in zip(STAT_KEYS, weights):
         share = w / tot
         if k == "hp":
-            base_stats[k] = int(28 + budget * share * 2.4)
+            base_stats[k] = int(14 + budget * share * 2.4)
         else:
-            base_stats[k] = int(8 + budget * share * 0.9)
+            base_stats[k] = int(4 + budget * share * 0.9)
 
     # Growth is RARITY's job. It used to be `1.4 + random()*2.6 + rarity*0.3`,
     # where the random term spanned 2.6 while rarity contributed 1.2 across the

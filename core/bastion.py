@@ -48,6 +48,13 @@ FACILITIES = {
         "desc": "Deep pressure conditioning. Gains HP.",
         "base_bits": 200,
     },
+    "crucible_tank": {
+        "name": "The Shallows", "kind": "hall", "stat": None, "essence": "tide",
+        "desc": "A still pool where a daemon can simply be. It teaches nothing "
+                "quickly, but it never stops, and it costs nothing — the way a "
+                "new arrival catches up with the rest.",
+        "base_bits": 0,
+    },
     "waystation": {
         "name": "The Waystation", "kind": "support", "essence": "volt",
         "desc": "Somewhere for expeditions to stage from. Each level lets one "
@@ -196,7 +203,7 @@ def snapshot() -> dict:
             "effect": effect_line(key, lvl),
         }
         if f["kind"] == "hall":
-            out[key]["slots"] = hall_slots(lvl)
+            out[key]["slots"] = hall_slots(lvl, key)
             out[key]["rate_per_hour"] = round(hall_rate(lvl), 2)
             out[key]["occupants"] = []
             for t in db.list_training(key):
@@ -212,12 +219,14 @@ def snapshot() -> dict:
 
 
 def effect_line(key: str, lvl: int) -> str:
+    if key == "crucible_tank":
+        return f"{SHALLOWS_SLOTS} slot(s) · free, and always open"
     if lvl == 0:
         return (f"not built · {array_capacity(0)} rifts resolvable"
                 if key == "array" else "not built")
     f = FACILITIES[key]
     if f["kind"] == "hall":
-        return (f"{hall_slots(lvl)} slot(s) · "
+        return (f"{hall_slots(lvl, key)} slot(s) · "
                 f"{hall_levels_per_day(lvl):.2f} levels of {f['stat'].upper()}/day")
     if key == "array":
         gate = array_gate(lvl)
@@ -241,7 +250,25 @@ def effect_line(key: str, lvl: int) -> str:
 
 
 # ------------------------------------------------------------ hall mechanics -
-def hall_slots(lvl: int) -> int:
+# The Shallows exists free at level 1 from the very start. It grants XP, not
+# stat points, so it levels a daemon properly rather than inflating it — which
+# makes it the one place a fresh capture can be brought up to the roster's
+# standard without competing for a real hall slot.
+SHALLOWS_XP_PER_HOUR = float(os.environ.get("AETHER_SHALLOWS_XP", "26"))
+SHALLOWS_SLOTS = int(os.environ.get("AETHER_SHALLOWS_SLOTS", "2"))
+
+
+def shallows_level_of(daemon) -> float:
+    """XP/hour, tapering as a daemon outgrows the pool. It is meant to bring a
+    newcomer up to the pack, not to raise a champion."""
+    from .daemon import Daemon
+    lvl = max(1, daemon.level)
+    return SHALLOWS_XP_PER_HOUR / (1.0 + (lvl / 18.0) ** 2)
+
+
+def hall_slots(lvl: int, key: str | None = None) -> int:
+    if key == "crucible_tank":
+        return SHALLOWS_SLOTS
     return 0 if lvl == 0 else 1 + (lvl - 1) // 3
 
 
@@ -281,9 +308,9 @@ def assign(daemon_id: int, hall: str) -> dict:
     if hall not in HALLS:
         return {"ok": False, "reason": "bad_hall"}
     lvl = db.facility_level(hall)
-    if lvl == 0:
+    if lvl == 0 and hall != "crucible_tank":
         return {"ok": False, "reason": "not_built"}
-    if len(db.list_training(hall)) >= hall_slots(lvl):
+    if len(db.list_training(hall)) >= hall_slots(lvl, hall):
         return {"ok": False, "reason": "hall_full"}
     db.start_training(daemon_id, hall)
     return {"ok": True}
@@ -297,6 +324,19 @@ def tick_training(now: float | None = None):
         d = db.get_daemon(t["daemon_id"])
         if not d:
             db.end_training(t["daemon_id"])
+            continue
+        if t["hall"] == "crucible_tank":
+            hours_s = max(0.0, (now - t["last_tick"]) / 3600.0)
+            if hours_s > 0:
+                ev = d.gain_xp(int(shallows_level_of(d) * hours_s))
+                d.care["energy"] = max(0, d.care["energy"] - 0.6 * hours_s)
+                db.save_daemon(d)
+                db.update_training(d.id, last_tick=now,
+                                   gained=t["gained"] + ev.get("levels", 0))
+                if ev.get("levels"):
+                    db.add_event("shallows",
+                                 f"{d.given_name or d.name} surfaced from the "
+                                 f"Shallows at level {d.level}.", daemon_id=d.id)
             continue
         hall = HALLS.get(t["hall"])
         if not hall:

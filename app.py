@@ -109,7 +109,7 @@ def _daemon_payload(d: Daemon) -> dict:
         out["training"] = {
             "hall": tr["hall"],
             "hall_name": bastion.FACILITIES[tr["hall"]]["name"],
-            "stat": bastion.FACILITIES[tr["hall"]]["stat"],
+            "stat": bastion.FACILITIES[tr["hall"]].get("stat"),
             "gained": tr["gained"],
             "rate": round(bastion.hall_rate(db.facility_level(tr["hall"])), 2),
         }
@@ -1028,7 +1028,8 @@ def reset():
                               "re-resolved from scratch.")
         return jsonify({"ok": True, "scope": scope, "cleared": cleared})
 
-    cleared = db.reset_all(keep_devices=(scope == "progress"))
+    cleared = db.reset_all(keep_devices=(scope == "progress"),
+                           keep_legacy=(scope != "everything"))
     ticker.reset_clocks()
     db.add_daemon(starter_daemon())
     db.bump_raised()

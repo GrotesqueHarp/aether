@@ -865,7 +865,7 @@ def reset_rifts() -> dict:
     return counts
 
 
-def reset_all(keep_devices: bool = True) -> dict:
+def reset_all(keep_devices: bool = True, keep_legacy: bool = True) -> dict:
     """Wipe progression back to a clean save.
 
     The schema itself is left alone — this clears rows, it does not drop
@@ -892,9 +892,15 @@ def reset_all(keep_devices: bool = True) -> dict:
         # instance's birthday all survive a wipe: they're the record of
         # everything this instance has ever done, and folding a run shouldn't
         # erase your own history.
-        c.execute("DELETE FROM meta WHERE key NOT IN "
-                  "('schema_version','awards','cosmetics','daemons_raised',"
-                  " 'instance_started','reformat_cycles','layers_dug')")
+        # Reformat folds a run and keeps your history — awards, cosmetics,
+        # lifetime counts. A full wipe is meant to be indistinguishable from
+        # first boot, so it takes those too; otherwise a "fresh start" quietly
+        # begins with earned awards and a Reformat multiplier already applied.
+        keep = ["'schema_version'"]
+        if keep_legacy:
+            keep += ["'awards'", "'cosmetics'", "'daemons_raised'",
+                     "'instance_started'", "'reformat_cycles'", "'layers_dug'"]
+        c.execute(f"DELETE FROM meta WHERE key NOT IN ({','.join(keep)})")
     return counts
 
 

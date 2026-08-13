@@ -1131,10 +1131,10 @@ async function bastionView(){
             data-ids="${f.occupants.map(o=>o.daemon_id).join(',')}"
             data-stat="${f.stat}"></canvas>`;
         }
-        occHtml+=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat.toUpperCase()} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
+        occHtml+=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat?f.stat.toUpperCase():'levels'} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
         const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);  // expeditions ARE exclusive
         if(f.occupants.length<f.slots&&free.length){
-          occHtml+=`<select data-enroll="${key}" data-drop="hall:${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name} · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}</option>`).join('')}</select>`;
+          occHtml+=`<select data-enroll="${key}" data-drop="hall:${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name}${f.stat?` · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}`:` · Lv${d.level}`}</option>`).join('')}</select>`;
         } else if(f.occupants.length>=f.slots){
           occHtml+=`<div class="muted mono" style="font-size:10.5px">${f.occupants.length}/${f.slots} slots — full</div>`;
         }
@@ -2640,7 +2640,7 @@ function confirmReset(){
       <span><b>Reset progression</b><br><span class="muted">Deletes every daemon, all depth, resources, facilities and the Pulse. Keeps the rifts you've already resolved so you needn't re-sweep.</span></span></label>
 
     <label class="rscope"><input type="radio" name="rscope" value="everything">
-      <span><b>Wipe the instance</b><br><span class="muted">Everything above, plus the discovered rifts and your Array level. Exactly like first boot.</span></span></label>
+      <span><b>Wipe the instance</b><br><span class="muted">Everything above, plus discovered rifts, your Array level, earned awards and cosmetics, Reformat cycles and every lifetime counter. Genuinely like first boot — nothing carries over.</span></span></label>
 
     <div class="mono muted" style="font-size:11px;margin-top:12px">Type RESET to confirm:</div>
     <input id="reset-word" placeholder="RESET" autocomplete="off" spellcheck="false">
@@ -2705,7 +2705,7 @@ function daemonCard(d){
     <div class="head">
       <div class="sig">${daemonSigil(d)}</div>
       <div class="title">
-        <h3><span class="dname" data-rename="${d.id}" title="click to rename">${d.display_name||d.name}</span>${d.given_name?`<span class="truename">${d.name}</span>`:''}${d.ascensions?`<span class="asc-rank" title="Ascension rank ${d.ascensions}">${'✦'.repeat(Math.min(d.ascensions,5))}${d.ascensions>5?d.ascensions:''}</span>`:''} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()}) ↗</span>`:''}</h3>
+        <h3><span class="dname" data-rename="${d.id}" title="click to rename">${d.display_name||d.name}</span>${d.given_name?`<span class="truename">${d.name}</span>`:''}${d.ascensions?`<span class="asc-rank" title="Ascension rank ${d.ascensions}">${'✦'.repeat(Math.min(d.ascensions,5))}${d.ascensions>5?d.ascensions:''}</span>`:''} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat?d.training.stat.toUpperCase():'levels'}) ↗</span>`:''}</h3>
         <div class="lvl">${d.stage} · Lv${d.level} · <span class="attr-${d.attribute}">${d.attribute}</span> · <span style="color:${d.color}">${d.element}</span> <span class="stars">${'★'.repeat(d.rarity)}</span></div>
         <div class="xpbar" style="margin-top:7px"><i style="width:${Math.round(100*d.xp/d.xp_to_next)}%"></i></div>
         <div class="mono muted" style="font-size:10.5px;margin-top:3px">${d.xp}/${d.xp_to_next} XP · ${d.wins}W ${d.losses}L</div>

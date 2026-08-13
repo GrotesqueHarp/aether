@@ -297,6 +297,20 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Levels, and the Shallows (v0.23)
+
+**A level gap is decisive now.** Daemons used to start with roughly seventeen
+levels' worth of free stats, which made levelling almost cosmetic — a Lv6 could
+beat a Lv17. Starting stats are much smaller, so the level number means what it
+says. In simulation the lower level now loses every time across an eleven-level
+gap.
+
+**The Shallows** is a free pool, open from the start with no building required.
+It grants XP rather than stat points, so it genuinely levels a daemon rather
+than inflating its stats, and it tapers as they outgrow it: a fresh capture
+reaches Lv6 in a day and Lv12 in a week, then slows. It's how a new arrival
+catches up with a roster you've been raising for months, and it costs nothing.
+
 ## Growth and training (v0.22)
 
 **Levelling is the engine, and rarity decides how fast it turns.** Every level
@@ -639,7 +653,7 @@ scopes:
 |---|---|---|
 | `rifts` | rift depth, tiers, wards, captures, harvest posts, expeditions, incursions | daemons, Bastion, resources, discovered rifts, lifetime layers |
 | `progress` | daemons, resources, facilities, eggs, all depth, the Pulse | the rifts you've already resolved |
-| `everything` | all of the above plus discovered rifts and your Array level | nothing — identical to first boot |
+| `everything` | all of the above plus discovered rifts, the Array, awards, cosmetics, Reformat cycles and lifetime counters | nothing — genuinely identical to first boot |
 
 `rifts` is the one you want when the world model changes under you and you'd
 like fresh nodes without surrendering your roster. It deliberately preserves
