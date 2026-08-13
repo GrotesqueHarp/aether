@@ -67,6 +67,10 @@ def _state_sig() -> str:
     up is what made a fixed refresh interval feel intrusive.
     """
     parts = [str(len(db.list_daemons())),
+             # levels belong here: a daemon levelling in the Shallows changes
+             # what the page should be drawing, and counting only *how many*
+             # are training meant that view never refreshed while it worked
+             ",".join(f"{d.id}:{d.level}" for d in db.list_daemons()),
              str(len(db.list_eggs())),
              str(len(db.list_harvests())),
              str(len(db.list_training())),

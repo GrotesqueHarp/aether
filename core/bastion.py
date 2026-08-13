@@ -129,7 +129,16 @@ def array_capacity(level: int) -> int:
 def upgrade_cost(key: str, level: int) -> dict:
     f = FACILITIES[key]
     if key == "crucible_tank":
-        return {}                      # free, fixed, and not for sale
+        # Free to use forever; paying deepens it. The curve is steep because a
+        # deeper pool raises every future daemon you will ever take in.
+        c = {"bits": round(SHALLOWS_BASE_BITS * (SHALLOWS_COST_GROWTH ** level), 1),
+             "essence.tide": round(SHALLOWS_BASE_BITS / 5
+                                   * (SHALLOWS_COST_GROWTH ** level), 1)}
+        if level >= 1:
+            c["cores"] = float(round(8 * (1.7 ** (level - 1))))
+        if level >= 3:
+            c["aethercite"] = float(level - 2)
+        return c
     scale = 1.55 ** level
     if key == "array":
         # Bits-only for the first few levels: the Array is how you reach the
@@ -179,8 +188,7 @@ def array_gate(level: int) -> dict | None:
 def upgrade(key: str) -> dict:
     if key not in FACILITIES:
         return {"ok": False, "reason": "bad_facility"}
-    if key == "crucible_tank":
-        return {"ok": False, "reason": "not_upgradeable"}
+
     lvl = db.facility_level(key)
     if key == "array":
         gate = array_gate(lvl)
@@ -242,7 +250,8 @@ def snapshot() -> dict:
 
 def effect_line(key: str, lvl: int) -> str:
     if key == "crucible_tank":
-        return f"{SHALLOWS_SLOTS} slot(s) · free, and always open"
+        return (f"{shallows_slots(lvl)} slot(s) · {shallows_rate(lvl):.0f} xp/h"
+                f" · useful to ~Lv{shallows_ceiling(lvl):.0f}")
     if lvl == 0:
         return (f"not built · {array_capacity(0)} rifts resolvable"
                 if key == "array" else "not built")
@@ -278,19 +287,38 @@ def effect_line(key: str, lvl: int) -> str:
 # standard without competing for a real hall slot.
 SHALLOWS_XP_PER_HOUR = float(os.environ.get("AETHER_SHALLOWS_XP", "26"))
 SHALLOWS_SLOTS = int(os.environ.get("AETHER_SHALLOWS_SLOTS", "2"))
+# Deepening the pool is deliberately one of the costliest things you can buy.
+# It is free to use forever at level 0; paying only ever widens it.
+SHALLOWS_COST_GROWTH = float(os.environ.get("AETHER_SHALLOWS_GROWTH", "2.6"))
+SHALLOWS_BASE_BITS = float(os.environ.get("AETHER_SHALLOWS_BASE", "4000"))
+
+
+def shallows_slots(lvl: int) -> int:
+    return SHALLOWS_SLOTS + lvl
+
+
+def shallows_rate(lvl: int) -> float:
+    """Deeper water teaches faster, and raises the level it stays useful to."""
+    return SHALLOWS_XP_PER_HOUR * (1.35 ** lvl)
+
+
+def shallows_ceiling(lvl: int) -> float:
+    """The level at which the pool's teaching has halved."""
+    return 18.0 + lvl * 7.0
 
 
 def shallows_level_of(daemon) -> float:
     """XP/hour, tapering as a daemon outgrows the pool. It is meant to bring a
-    newcomer up to the pack, not to raise a champion."""
-    from .daemon import Daemon
+    newcomer up to the pack, not to raise a champion — but a deeper pool both
+    teaches faster and stays useful to higher levels."""
+    tank = db.facility_level("crucible_tank")
     lvl = max(1, daemon.level)
-    return SHALLOWS_XP_PER_HOUR / (1.0 + (lvl / 18.0) ** 2)
+    return shallows_rate(tank) / (1.0 + (lvl / shallows_ceiling(tank)) ** 2)
 
 
 def hall_slots(lvl: int, key: str | None = None) -> int:
     if key == "crucible_tank":
-        return SHALLOWS_SLOTS
+        return shallows_slots(lvl)
     return 0 if lvl == 0 else 1 + (lvl - 1) // 3
 
 

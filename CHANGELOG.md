@@ -22,6 +22,25 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.24.0]
+
+### Added
+- **The Shallows has its own tab** — a full-width pool with light shafts moving
+  through the water, a rippling surface, sand and stones, swaying weed, rising
+  bubbles, and the daemons themselves drifting in it. Progress cards sit
+  beneath with exact XP, hourly rate and time to the next level.
+- **Upgrades.** Deepening the pool is one of the costliest things you can buy —
+  4,000 Bits at first, x2.6 per level, with Cores from level 1 and Aethercite
+  from level 3. Each level adds a slot, raises the rate (26 xp/h to 157 by
+  level 6) and lifts the level it stays useful to (Lv18 to Lv60). It remains
+  free to use forever; paying only ever widens it.
+
+### Fixed
+- **The view never refreshed while the pool worked.** The structural
+  fingerprint counted *how many* daemons were training but not their levels, so
+  a daemon could level up without the page noticing. Levels are now part of the
+  fingerprint.
+
 ## [0.23.1]
 
 ### Fixed

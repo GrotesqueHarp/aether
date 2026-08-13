@@ -297,6 +297,18 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## The Shallows (v0.24)
+
+Its own tab: a wide pool with light moving through the water, weed on the
+floor, and the daemons you have put in it drifting about. Beneath it, exactly
+what each is earning and when it will next level.
+
+Free to use forever with two slots. **Deepening** it is one of the most
+expensive purchases in the game — 4,000 Bits to start, x2.6 per level, Cores
+from the first upgrade and Aethercite from the third — and each level adds a
+slot, raises the teaching rate, and lifts the level the pool stays useful to.
+It raises every daemon you will ever take in, which is what justifies the cost.
+
 ## Levels, and the Shallows (v0.23)
 
 **A level gap is decisive now.** Daemons used to start with roughly seventeen
