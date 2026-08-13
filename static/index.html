@@ -318,6 +318,25 @@ canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 
 .wd-swatch{display:flex;gap:4px;margin-top:8px}
 .wd-swatch i{width:20px;height:20px;border-radius:5px;border:1px solid rgba(255,255,255,.10)}
 
+.aff{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.6}
+.aff-l{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;margin-right:3px}
+.aff-l:not(:first-child){margin-left:8px}
+.bond{font-family:var(--mono);font-size:10px;color:#7FCBEB;border:1px solid #2a4a5e;border-radius:999px;padding:2px 8px}
+.drag-ghost{position:fixed;transform:translate(-50%,-160%);pointer-events:none;z-index:999;
+  font-family:var(--mono);font-size:11px;color:var(--text);background:rgba(12,18,32,.92);
+  border:1px solid var(--aether);border-radius:999px;padding:4px 11px}
+body.dragging-daemon [data-drop]{outline:2px dashed var(--aether);outline-offset:3px}
+body.dragging-daemon{cursor:grabbing}
+
+.dname{cursor:pointer;border-bottom:1px dashed transparent}
+.dname:hover{border-bottom-color:var(--aether)}
+.truename{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:7px;font-weight:400}
+.bio{font-size:10.5px;color:var(--dim);margin-top:4px;letter-spacing:.02em}
+
+.minitank{width:100%;height:52px;display:block;border-radius:7px;margin:6px 0;
+  background:rgba(10,15,28,.55);border:1px solid var(--hair)}
+.shelf-mini{height:44px}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -772,6 +791,7 @@ async function riftView(dev){
   renderOverclock(dev);
   renderDownclock(dev);
   riftFlowMount();
+  miniMount();
   $('#capture').onclick=async()=>{
     const res=await api('/api/capture',{method:'POST',body:JSON.stringify({mac:dev.mac})});
     if(res.error){toast(res.message||res.error);return;}
@@ -906,7 +926,9 @@ function renderDescent(r){
       const essKey=Object.keys(hv.rates).find(k=>k.startsWith('essence.'));
       const essName=essKey?essKey.split('.')[1]:'';
       const bitsHr=hv.rates.bits||0;
-      inner=`<div class="hv-who"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hv.color}"></span> ${hv.name}</div>
+      inner=`<canvas class="minitank shelf-mini" data-mini="shelf"
+               data-ids="${hv.daemon_id}" data-tint="${ESS_COLORS[essName]||hv.color}"></canvas>
+             <div class="hv-who"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hv.color}"></span> ${hv.name}</div>
              <canvas class="flow" data-flow="${L}" data-tint="${ESS_COLORS[essName]||hv.color}" data-rate="${bitsHr}"></canvas>
              <div class="hv-rate">${rate}</div><div class="hv-life">${fmt(hv.lifetime_bits)} Bits gathered</div>
              <button class="btn ghost" data-stopharvest="${hv.daemon_id}">Stop</button>`;
@@ -914,7 +936,7 @@ function renderDescent(r){
       const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);
       inner=`<div class="muted" style="font-size:11px">post open</div>${free.length?`<select data-assign="${L}"><option value="">assign daemon…</option>${free.map(d=>`<option value="${d.id}">${d.name} · pw${d.power}</option>`).join('')}</select>`:'<div class="muted" style="font-size:10px;margin-top:4px">no free daemons</div>'}`;
     }
-    shelves.push(`<div class="shelf" data-shelf="${L}"><div class="slabel">Layer ${L}</div>${inner}</div>`);
+    shelves.push(`<div class="shelf" data-shelf="${L}"${hv?'':` data-drop="shelf:${r.mac}:${L}"`}><div class="slabel">Layer ${L}</div>${inner}</div>`);
   }
 
   const M = r.mastery || {level:1, pct:0, milestones:[]};
@@ -1102,10 +1124,15 @@ async function bastionView(){
       const affordable=Object.entries(f.next_cost).every(([k,v])=>(state.res[k]||0)>=v);
       let occHtml='';
       if(f.kind==='hall'&&f.level>0){
-        occHtml=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat.toUpperCase()} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
+        if(f.occupants.length){
+          occHtml += `<canvas class="minitank" data-mini="hall:${key}"
+            data-ids="${f.occupants.map(o=>o.daemon_id).join(',')}"
+            data-stat="${f.stat}"></canvas>`;
+        }
+        occHtml+=f.occupants.map(o=>`<div class="occ"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:${o.color}"></span>${o.name}<span class="mono">+${o.gained} ${f.stat.toUpperCase()} · ${o.hours}h</span><button class="btn ghost" style="margin-left:auto;padding:3px 8px;font-size:10.5px" data-withdraw="${o.daemon_id}">Out</button></div>`).join('');
         const free=state.roster.filter(d=>!d.on_expedition&&!d.harvesting&&!d.training);  // expeditions ARE exclusive
         if(f.occupants.length<f.slots&&free.length){
-          occHtml+=`<select data-enroll="${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name} · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}</option>`).join('')}</select>`;
+          occHtml+=`<select data-enroll="${key}" data-drop="hall:${key}"><option value="">enroll daemon… (${f.occupants.length}/${f.slots} slots)</option>${free.map(d=>`<option value="${d.id}">${d.name} · ${f.stat.toUpperCase()} ${d.battle_stats[f.stat]}</option>`).join('')}</select>`;
         } else if(f.occupants.length>=f.slots){
           occHtml+=`<div class="muted mono" style="font-size:10.5px">${f.occupants.length}/${f.slots} slots — full</div>`;
         }
@@ -1128,6 +1155,7 @@ async function bastionView(){
   $('#main').innerHTML=html;
   renderGlyphs();
   renderReformat();
+  miniMount();
   $('#main').querySelectorAll('[data-upgrade]').forEach(btn=>btn.onclick=async()=>{
     const res=await api('/api/bastion/upgrade',{method:'POST',body:JSON.stringify({key:btn.dataset.upgrade})});
     if(!res.ok){toast(res.reason==='cant_afford'?'Not enough resources':'Cannot upgrade');return;}
@@ -1930,6 +1958,88 @@ async function loadCosmetics(){
   }catch(e){}
 }
 
+/* ================= MINI TANKS =================
+   A daemon that is training or harvesting should be visibly somewhere doing
+   it, not a line of text saying so. Each hall and each worked shelf gets a
+   small live tank with the actual creatures in it, drawn by the same code
+   that draws the big one — so a Mega in a hall looks like your Mega.
+
+   One shared loop, paused with the tab, and it walks the DOM each frame so
+   panels can be redrawn underneath it without leaving orphans. */
+const MINI = { raf:null };
+
+function miniFrame(){
+  MINI.raf = null;
+  if(document.hidden){ MINI.raf = requestAnimationFrame(miniFrame); return; }
+  const nodes = document.querySelectorAll('canvas.minitank');
+  if(!nodes.length){ return; }              // nothing on screen; stop until remounted
+  MINI.t = (MINI.t || 0) + 1;
+  for(const cv of nodes){
+    const rect = cv.getBoundingClientRect();
+    if(!rect.width) continue;
+    if(cv.width !== Math.round(rect.width*2)){
+      cv.width = Math.round(rect.width*2); cv.height = Math.round(rect.height*2);
+    }
+    const ctx = cv.getContext('2d');
+    const dpr = 2, W = rect.width, H = rect.height;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    const kind = (cv.dataset.mini || '').split(':')[0];
+    const tint = cv.dataset.tint || '#8B7CF6';
+    // the setting: a hall glows from below, a shelf streams upward
+    if(kind === 'hall'){
+      const g = ctx.createLinearGradient(0,H,0,0);
+      g.addColorStop(0, 'rgba(232,181,77,.16)'); g.addColorStop(1, 'rgba(232,181,77,0)');
+      ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    } else {
+      ctx.fillStyle = 'rgba(6,10,20,.55)'; ctx.fillRect(0,0,W,H);
+      for(let i=0;i<10;i++){
+        const x = ((i*53 + MINI.t*0.3) % W);
+        const y = H - ((MINI.t*1.1 + i*37) % (H+14));
+        ctx.beginPath(); ctx.moveTo(x, y+5); ctx.lineTo(x, y);
+        ctx.strokeStyle = tint; ctx.globalAlpha = .5; ctx.lineWidth = 1.4; ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    const ids = (cv.dataset.ids || '').split(',').filter(Boolean).map(Number);
+    ids.forEach((id, i) => {
+      const d = (state.roster || []).find(x => x.id === id);
+      if(!d) return;
+      const n = ids.length;
+      const x = W * ((i + 0.5) / n);
+      const swim = Math.sin(MINI.t/26 + i*1.7);
+      const y = H*0.55 + swim*H*0.16;
+      const c = { d, phase: MINI.t/22 + i, facing: swim >= 0 ? 1 : -1,
+                  mood: 'idle', poked: 0 };
+      ctx.save();
+      ctx.translate(x, y);
+      const scale = Math.min(1, (H*0.42) / (STAGE_SIZE[d.stage] || 20));
+      ctx.scale(scale, scale);
+      ctx.translate(-x, -y);
+      drawCreature(ctx, c, x, y, false);
+      ctx.restore();
+      // what the work looks like
+      if(kind === 'hall'){
+        for(let k=0;k<3;k++){
+          const a = MINI.t/18 + k*2.1 + i;
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(a)*H*0.30, y + Math.sin(a)*H*0.22, 1.6, 0, Math.PI*2);
+          ctx.fillStyle = '#E8B54D'; ctx.globalAlpha = .35 + .35*Math.sin(a*2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+  }
+  MINI.raf = requestAnimationFrame(miniFrame);
+}
+
+function miniMount(){
+  if(!MINI.raf) MINI.raf = requestAnimationFrame(miniFrame);
+}
+
 /* ================= THE TANK =================
    The Nest, as something to watch rather than read.
 
@@ -1984,6 +2094,39 @@ function tankMount(){
       r:0.5+Math.random()*2.1, s:0.00004+Math.random()*0.00014,
       a:0.06+Math.random()*0.16 });
   }
+  // drag straight out of the tank onto a post — the aquarium as the
+  // interface, rather than a picture of one
+  cv.draggable = false;
+  cv.onmousedown = (ev) => {
+    const r = cv.getBoundingClientRect();
+    const px = (ev.clientX - r.left)/r.width, py = (ev.clientY - r.top)/r.height;
+    let best=null, bd=0.09;
+    for(const c of Object.values(state.tank||{})){
+      if(c.x===undefined) continue;
+      const dd = Math.hypot(c.x-px,(c.y-py)*0.6);
+      if(dd<bd){ best=c; bd=dd; }
+    }
+    if(!best) return;
+    state.dragging = best.d.id;
+    document.body.classList.add('dragging-daemon');
+    const ghost = document.createElement('div');
+    ghost.className = 'drag-ghost'; ghost.textContent = best.d.name;
+    document.body.appendChild(ghost);
+    const move = e => { ghost.style.left = e.clientX+'px'; ghost.style.top = e.clientY+'px'; };
+    const up = e => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      ghost.remove();
+      document.body.classList.remove('dragging-daemon');
+      const t = document.elementFromPoint(e.clientX, e.clientY);
+      const drop = t && t.closest('[data-drop]');
+      if(drop) handleDrop(state.dragging, drop.dataset.drop);
+      state.dragging = null;
+    };
+    move(ev);
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
   cv.onclick = (ev) => {
     const r = cv.getBoundingClientRect();
     const px = (ev.clientX - r.left) / r.width, py = (ev.clientY - r.top) / r.height;
@@ -2066,6 +2209,24 @@ function tankFrame(){
   for(const c of tankSync()) tankDraw(ctx, c, W, H);
 
   TANK.raf = requestAnimationFrame(tankFrame);
+}
+
+async function handleDrop(daemonId, spec){
+  // spec is "hall:forge" or "shelf:<mac>:<layer>"
+  const [kind, a, b] = spec.split(':');
+  let res;
+  if(kind === 'hall'){
+    res = await api('/api/bastion/train', {method:'POST',
+      body: JSON.stringify({daemon_id: daemonId, hall: a})});
+  } else if(kind === 'shelf'){
+    res = await api('/api/harvest', {method:'POST',
+      body: JSON.stringify({daemon_id: daemonId, mac: a,
+                            layer: +b, node_index: +b})});
+  } else return;
+  if(res && (res.error || res.ok === false)){ toast(res.message || res.error); return; }
+  toast('Posted');
+  await refreshRoster();
+  if(state.view==='bastion') bastionView(); else if(state.currentRift) riftView(state.currentRift);
 }
 
 function tankMood(d){
@@ -2213,10 +2374,15 @@ function tankStep(c, W, H){
 }
 
 function tankDraw(ctx, c, W, H){
+  drawCreature(ctx, c, c.x*W, c.y*H, true);
+}
+
+/* One creature, at a point. Shared by the Nest tank and every mini tank, so a
+   daemon looks like itself wherever it happens to be working. */
+function drawCreature(ctx, c, x, y, withLabel){
   const d = c.d, care = d.care || {};
   const col = d.color || EL_COLORS[d.element] || '#8B7CF6';
   const size = (STAGE_SIZE[d.stage] || 14) * (0.85 + 0.06*(d.rarity||1));
-  const x = c.x*W, y = c.y*H;
   const hunger = (care.hunger ?? 100)/100;
   const energy = (care.energy ?? 100)/100;
   const corrupt = (care.corruption ?? 0)/100;
@@ -2431,13 +2597,15 @@ function tankDraw(ctx, c, W, H){
   }
   ctx.restore();
 
+  if(!withLabel){ ctx.globalAlpha = 1; return; }
+
   // name, and a quiet word when something's wrong
   ctx.globalAlpha = 0.62;
   ctx.font = '10px ui-monospace, monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8494ad';
   const lab = y + size*0.62 + 13 + ((d.id*7)%3)*4;
-  ctx.fillText(d.name, x, lab);
+  ctx.fillText(d.display_name || d.name, x, lab);
   if(c.mood === 'sleeping'){
     ctx.globalAlpha = 0.5; ctx.fillStyle = '#7FCBEB';
     ctx.font = '11px ui-monospace, monospace';
@@ -2535,7 +2703,7 @@ function daemonCard(d){
     <div class="head">
       <div class="sig">${daemonSigil(d)}</div>
       <div class="title">
-        <h3>${d.name}${d.ascensions?`<span class="asc-rank" title="Ascension rank ${d.ascensions}">${'✦'.repeat(Math.min(d.ascensions,5))}${d.ascensions>5?d.ascensions:''}</span>`:''} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()}) ↗</span>`:''}</h3>
+        <h3><span class="dname" data-rename="${d.id}" title="click to rename">${d.display_name||d.name}</span>${d.given_name?`<span class="truename">${d.name}</span>`:''}${d.ascensions?`<span class="asc-rank" title="Ascension rank ${d.ascensions}">${'✦'.repeat(Math.min(d.ascensions,5))}${d.ascensions>5?d.ascensions:''}</span>`:''} ${away?`<span class="away jump" onclick="jumpToActivity(${d.id})" title="Go to ${d.expedition.world}">AWAY · ${d.expedition.world} ↗</span>`:''}${mining?`<span class="away jump" style="color:var(--online);border-color:var(--online)" onclick="jumpToActivity(${d.id})" title="Go to its harvest node">HARVESTING · ${d.harvesting.world} ↗</span>`:''}${inHall?`<span class="away jump" style="color:var(--warn);border-color:var(--warn)" onclick="jumpToActivity(${d.id})" title="Go to ${d.training.hall_name}">TRAINING · ${d.training.hall_name} (+${d.training.gained} ${d.training.stat.toUpperCase()}) ↗</span>`:''}</h3>
         <div class="lvl">${d.stage} · Lv${d.level} · <span class="attr-${d.attribute}">${d.attribute}</span> · <span style="color:${d.color}">${d.element}</span> <span class="stars">${'★'.repeat(d.rarity)}</span></div>
         <div class="xpbar" style="margin-top:7px"><i style="width:${Math.round(100*d.xp/d.xp_to_next)}%"></i></div>
         <div class="mono muted" style="font-size:10.5px;margin-top:3px">${d.xp}/${d.xp_to_next} XP · ${d.wins}W ${d.losses}L</div>
@@ -2565,6 +2733,19 @@ function daemonCard(d){
       <button class="btn ghost" data-train="def" data-id="${d.id}">+DEF</button>
       <button class="btn ghost" data-train="spd" data-id="${d.id}">+SPD</button>
     </div>`}
+    ${d.bio?`<div class="bio mono">${[
+        d.bio.born?`kept ${Math.max(1,Math.round((Date.now()/1000-d.bio.born)/86400))}d`:'',
+        d.bio.origin_layer?`drawn from layer ${d.bio.origin_layer}`:'hatched in the Nest',
+        d.bio.deepest_layer?`deepest ${d.bio.deepest_layer}`:'',
+        (d.bio.wins||d.bio.losses)?`${d.bio.wins}W ${d.bio.losses}L`:'',
+        d.bio.defences?`${d.bio.defences} defence(s)`:''
+      ].filter(Boolean).join(' · ')}</div>`:''}
+    ${d.affinity&&d.affinity.biome_name?`<div class="aff">
+       <span class="aff-l">favours</span> ${d.affinity.biome_name}
+       <span class="aff-l">likes</span> ${d.affinity.likes_label}
+       <span class="aff-l">avoids</span> ${d.affinity.dislikes_label}</div>`:''}
+    ${(d.bonds&&d.bonds.length)?`<div class="worn">${d.bonds.map(b=>
+       `<span class="bond" title="${b.hours}h together">${'\u25c8'.repeat(b.level)} ${b.name}</span>`).join('')}</div>`:''}
     ${(d.traits&&d.traits.length)?`<div class="worn">${d.traits.map(t=>`<span class="trait" title="${t.desc}">${t.name}</span>`).join('')}</div>`:''}
     ${(d.equipped&&d.equipped.length)?`<div class="worn">${d.equipped.map(x=>`<span class="wglyph" title="${x.kind} Q${x.quality}">${x.kind} Q${x.quality}</span>`).join('')}<span class="mono muted" style="font-size:10px">${d.equipped.length}/${d.glyph_slots} slots</span></div>`:''}
     ${(evo||asc)?`<div class="actions">${evo}${asc}</div>`:''}
@@ -2576,6 +2757,27 @@ function bindDaemonActions(){
     if(act==='evolve'){const r=await api(`/api/daemon/${id}/evolve`,{method:'POST'});if(r.result.ok)toast(`Evolved to ${r.result.to}!`+(r.result.attr_from!==r.result.attr_to?` (now ${r.result.attr_to})`:''));updateCard(r.daemon);return;}
     const r=await api(`/api/daemon/${id}/care`,{method:'POST',body:JSON.stringify({action:act})});
     updateCard(r.daemon);
+  });
+  document.querySelectorAll('[data-rename]').forEach(el=>el.onclick=()=>{
+    const d=state.roster.find(x=>x.id===+el.dataset.rename); if(!d)return;
+    modal(`<div class="card reset-modal" style="padding:22px;max-width:420px">
+      <h2 style="font-size:18px;margin-bottom:6px">Name this daemon</h2>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">
+        It was born <b>${d.name}</b>. Call it whatever you like — leave this blank to
+        go back to the name it came with.</div>
+      <input id="nm" maxlength="24" placeholder="${d.name}" value="${d.given_name||''}">
+      <div style="display:flex;gap:9px">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn primary" id="nm-go">Name it</button>
+      </div></div>`);
+    $('#nm').focus();
+    $('#nm-go').onclick=async()=>{
+      const r=await api(`/api/daemon/${d.id}/name`,{method:'POST',
+        body:JSON.stringify({name:$('#nm').value})});
+      closeModal();
+      if(r.error){toast(r.error);return;}
+      toast('Named'); nestView();
+    };
   });
   document.querySelectorAll('[data-ascend]').forEach(b=>b.onclick=()=>{
     const d=state.roster.find(x=>x.id===+b.dataset.ascend);

@@ -217,7 +217,12 @@ def tick_expeditions(now: float | None = None):
     now = now or time.time()
     for ex in db.list_expeditions(active_only=True):
         d_pre = db.get_daemon(ex["daemon_id"])
-        cadence = FIGHT_EVERY / (traits.mult(d_pre, "expedition") if d_pre else 1.0)
+        from . import affinity
+        pace = (traits.mult(d_pre, "expedition")
+                * affinity.job_mult(d_pre, "expedition")
+                * affinity.biome_mult(d_pre, generate_rift(ex["mac"])["biome_key"])
+                ) if d_pre else 1.0
+        cadence = FIGHT_EVERY / max(0.2, pace)
         if now - ex["last_tick"] < cadence:
             continue
         d = db.get_daemon(ex["daemon_id"])
@@ -307,6 +312,8 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         db.set_progress(mac, layer, layer >= LAYERS)
         db.bump_layers_dug(2 if mastery.has(prog_now.get("mastery_xp", 0), "mastered") else 1)
         db.add_mastery_xp(mac, mastery.xp_for_clear(layer, layer % 25 == 0))
+        if layer > d.deepest_layer:
+            d.deepest_layer = layer
         lvl_txt = f" It reached Lv{d.level}!" if ev["levels"] else ""
         if boss:
             db.add_event("exped_boss",
@@ -332,6 +339,28 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
 
 
 # --------------------------------------------------------------------------
+def tick_bonds(now: float | None = None):
+    """Daemons working the same rift, or fighting in the same party, spend
+    time together. Bonds are the only relationship here that is earned rather
+    than rolled, so they accrue slowly and never decay."""
+    from . import affinity
+    now = now or time.time()
+    last = float(db.get_meta("bond_tick", "0") or 0)
+    db.set_meta("bond_tick", str(now))
+    if not last:
+        return
+    hours = (now - last) / 3600.0
+    if hours <= 0:
+        return
+    by_rift: dict[str, list[int]] = {}
+    for h in db.list_harvests():
+        by_rift.setdefault(h["mac"], []).append(h["daemon_id"])
+    for e in db.list_expeditions():
+        by_rift.setdefault(e["mac"], []).append(e["daemon_id"])
+    for ids in by_rift.values():
+        affinity.add_time(sorted(set(ids)), hours)
+
+
 def tick_harvests(now: float | None = None):
     """Continuously accrue resources for every assigned harvester."""
     from . import economy
@@ -366,6 +395,7 @@ def tick_eggs(now: float | None = None):
         if egg["hatch_at"] > now:
             continue
         d = economy.hatch(egg)
+        d.born = time.time()
         db.add_daemon(d)
         db.bump_raised()
         db.hatch_egg_row(egg["id"])
@@ -396,6 +426,8 @@ def _run():
             apply_drift(now)
             tick_expeditions(now)
             tick_harvests(now)
+            tick_bonds(now)
+            affinity.check_wishes(now)
             tick_eggs(now)
             from . import bastion, war
             bastion.tick_training(now)

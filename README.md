@@ -297,6 +297,38 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Names, histories and presence (v0.21)
+
+Daemons can be **named** — click the name on its card. It keeps the name it was
+born with beside yours, and the Tank uses whatever you chose.
+
+Each one keeps a **biography**: how long you've had it, the shelf it was drawn
+from, the deepest layer it has personally taken, its win-loss record, and the
+incursions it has held.
+
+And they're **visibly somewhere**. A daemon in a training hall swims in a small
+lit chamber with motes orbiting it; one working a shelf is drawn with the
+essence it's pulling streaming past. Same rendering as the Nest, so your Mega
+looks like your Mega wherever it happens to be.
+
+## Knowing your daemons (v0.20)
+
+Every daemon favours a biome, likes one kind of work, and dislikes another —
+derived from its seed, so they've always been true of the creatures you own.
+The numbers are real: +18% in a favoured biome, +15% on favoured work, -12% on
+work it resents. A well-matched roster beats a well-optimised one.
+
+Daemons that share a rift or fight together build **bonds** over about two
+days, which never decay and stack into a genuine party bonus. Bonded daemons
+kept apart will eventually say so.
+
+**Wishes** are how they ask: a note in the Pulse when one has held the same
+post for weeks, or resents its job, or misses someone. Nothing expires and
+nothing is lost by ignoring them.
+
+You can also just reach into the Tank and **drag a daemon onto a shelf or a
+hall** — valid targets light up while you drag.
+
 ## The Waystation (v0.19)
 
 Digging turned out to be limited by throughput rather than difficulty: a party

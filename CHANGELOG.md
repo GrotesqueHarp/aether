@@ -22,6 +22,43 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.21.0]
+
+### Added
+- **Naming.** Click a daemon's name to call it whatever you like; it keeps its
+  true name alongside, and the Tank uses your name for it. Clearing the field
+  restores the name it was born with.
+- **Biography.** Each daemon now remembers how long you've kept it, the shelf
+  it was drawn from, the deepest layer it has personally taken, its record, and
+  how many incursions it has held. A creature with a history is one you think
+  twice about selling.
+- **Mini tanks.** Training halls and worked harvest shelves now show the actual
+  creature doing the work — the same drawing code as the Nest, so a Mega in a
+  hall looks like your Mega. Halls glow from below with training motes orbiting
+  the occupant; shelves stream essence past it in the colour it's pulling.
+- Creature drawing was factored into a shared `drawCreature()` so any panel can
+  show a daemon where it stands.
+
+## [0.20.0]
+
+### Added
+- **Preferences.** Every daemon favours a biome, likes one kind of work and
+  dislikes another — derived from its seed, so every creature you already own
+  has always had them. Posting one where it belongs is worth +18% in a
+  favoured biome and +15% on favoured work; the wrong job costs 12%. Assignment
+  stops being a sort by power and becomes an act of knowing them.
+- **Bonds.** Daemons that work the same rift or fight in the same party build
+  shared time, and after roughly two days together form a bond that never
+  decays. Bonds stack into a real party bonus (+7% per level, three levels) and
+  show on the daemon card.
+- **Wishes.** A daemon may occasionally want something — to leave a post it
+  dislikes, to move after weeks in one place, or to work near someone it's
+  bonded with. They arrive as notes in the Pulse, never expire, and cost
+  nothing to ignore.
+- **Drag and drop.** Pull a daemon out of the Tank and drop it straight onto a
+  training hall or a harvest shelf. Valid targets outline themselves while
+  you're dragging.
+
 ## [0.19.0]
 
 ### Added

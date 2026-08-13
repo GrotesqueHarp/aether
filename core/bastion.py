@@ -295,6 +295,8 @@ def tick_training(now: float | None = None):
         rate = hall_rate(db.facility_level(t["hall"]))
         rate *= 1.0 + glyph.bonus(getattr(d, "equipped", []), "training")
         rate *= traits.mult(d, "training")
+        from . import affinity
+        rate *= affinity.job_mult(d, "training")
         banked = t["banked"] + rate * hours
         whole = int(banked)
         if whole > 0:

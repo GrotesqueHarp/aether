@@ -38,6 +38,7 @@ from core import daemon as daemon_mod
 from core import glyph as glyph_mod
 from core import mastery
 from core import synergy
+from core import affinity
 from core import reformat
 from core import awards
 from core import objectives as objectives_mod
@@ -100,6 +101,8 @@ def _daemon_payload(d: Daemon) -> dict:
                 d, rift, hv["node_index"], ticker.dormancy(hv["mac"])).items()},
         }
     out["sell_value"] = economy.sell_value(d)
+    out["affinity"] = affinity.describe(d)
+    out["bonds"] = affinity.bonds_for(d.id) if d.id else []
     tr = db.get_training(d.id) if d.id else None
     out["training"] = None
     if tr:
@@ -201,6 +204,7 @@ def bootstrap():
     if db.get_meta("bootstrapped") == "1":
         return jsonify({"error": "already_bootstrapped"}), 400
     d = starter_daemon()
+    d.born = time.time()
     db.add_daemon(d)
     db.bump_raised()
     db.set_meta("bootstrapped", "1")
@@ -414,6 +418,21 @@ def evolve(did):
     return jsonify({"result": res, "daemon": _daemon_payload(d)})
 
 
+@app.route("/api/daemon/<int:did>/name", methods=["POST"])
+def rename(did):
+    d = db.get_daemon(did)
+    if not d:
+        return jsonify({"error": "not_found"}), 404
+    raw = (request.get_json(force=True, silent=True) or {}).get("name", "")
+    name = " ".join(str(raw).split())[:24]
+    old = d.given_name or d.name
+    d.given_name = name
+    db.save_daemon(d)
+    if name and name != old:
+        db.add_event("named", f"{old} answers to {name} now.", daemon_id=did)
+    return jsonify({"ok": True, "daemon": _daemon_payload(db.get_daemon(did))})
+
+
 @app.route("/api/daemon/<int:did>/ascend", methods=["POST"])
 def ascend(did):
     d = db.get_daemon(did)
@@ -515,15 +534,23 @@ def battle():
     # party composition, applied to clones so a one-fight bonus can
     # never be written back into stored stats
     fighters, synergies = synergy.apply(party)
+    bond_bonus = affinity.party_bonus(party)
+    if bond_bonus:
+        for f in fighters:
+            for k in f.base_stats:
+                f.base_stats[k] = int(f.base_stats[k] * (1 + bond_bonus))
     result = simulate_team(
         fighters, foes,
         seed_extra=f"{mac}:{layer}:{sum(d.wins + d.losses for d in party)}")
     won = result["winner"] == "a"
+    if len(party) > 1:                      # a fight is shared time, briefly
+        affinity.add_time([d.id for d in party], 0.25)
 
     reward = {"xp": 0, "levels": 0, "cleared_layer": False, "layer": layer,
               "gatekeeper": spec["is_gatekeeper"], "dormant_bonus": dim,
               "loot": {}, "tier": prog["tier"], "capture_unlocked": False,
-              "synergies": synergies}
+              "synergies": synergies,
+              "bond_bonus": round(bond_bonus, 3)}
     if won:
         xp_total = int(spec["reward_xp"] * (ticker.DORMANT_XP_MULT if dim else 1.0))
         xp_each = max(1, xp_total // len(party))
@@ -543,6 +570,10 @@ def battle():
             db.add_mastery_xp(r["mac"], mxp)
             reward["mastery_xp"] = round(mxp, 1)
             reward["cleared_layer"] = True
+            for f in party:
+                if layer > f.deepest_layer:
+                    f.deepest_layer = layer
+                    db.save_daemon(f)
             loot = economy.node_loot(r, layer, dim, prog)
             economy.grant(loot)
             reward["loot"] = loot
@@ -595,6 +626,8 @@ def capture():
     milestone = prog["captures_taken"] + 1
     wild = world_mod.capture_daemon(r["mac"], milestone, prog["tier"])
     wild.id = None
+    wild.born = time.time()
+    wild.origin_layer = milestone * world_mod.CAPTURE_EVERY
     db.add_daemon(wild)
     db.bump_raised()
     db.set_progress_fields(r["mac"], captures_taken=milestone)

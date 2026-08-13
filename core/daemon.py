@@ -86,6 +86,12 @@ class Daemon:
     care: dict = field(default_factory=lambda: dict(CARE_DEFAULTS))
     wins: int = 0
     losses: int = 0
+    # biography — a creature you keep for months should remember its own life
+    born: float = 0.0           # when it entered your care
+    origin_layer: int = 0       # the shelf it was drawn from, if captured
+    deepest_layer: int = 0      # the deepest ground it has personally taken
+    defences: int = 0           # incursions held
+    given_name: str = ""        # yours, if you named it
     ascensions: int = 0         # lineage rank — see ascend()
     id: Optional[int] = None    # set by the DB layer
 
@@ -271,6 +277,12 @@ class Daemon:
         d["ascend_level"] = ASCEND_LEVEL
         from . import glyph, traits
         d["traits"] = traits.describe(self)
+        d["display_name"] = self.given_name or self.name
+        d["given_name"] = self.given_name
+        d["bio"] = {"born": self.born, "origin_layer": self.origin_layer,
+                    "deepest_layer": self.deepest_layer,
+                    "defences": self.defences,
+                    "wins": self.wins, "losses": self.losses}
         d["equipped"] = getattr(self, "equipped", [])
         d["glyph_slots"] = glyph.slots_for(self)
         d["color"] = content.ELEMENT_COLORS.get(self.element, "#8B7CF6")
@@ -281,6 +293,7 @@ class Daemon:
         keep = {k: d[k] for k in (
             "seed", "attribute", "element", "rarity", "base_stats", "growth",
             "sigil", "origin_mac", "name", "stage", "level", "xp", "care",
+            "born", "origin_layer", "deepest_layer", "defences", "given_name",
             "wins", "losses", "ascensions", "id") if k in d}
         return cls(**keep)
 

@@ -238,6 +238,7 @@ def _defense_holds(mac, rift, prog, defenders, nulls, result, manual):
         if live:
             live.gain_xp(xp_each)
             live.wins += 1
+            live.defences += 1
             db.save_daemon(live)
     db.set_progress_fields(mac, ward=prog["ward"] + 1)
     db.end_incursion(mac)

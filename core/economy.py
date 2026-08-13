@@ -57,6 +57,9 @@ def harvest_rates(daemon: Daemon, rift: dict, node_index: int,
     mult *= reformat.echo_mult()
     mult *= 1.0 + glyph.bonus(getattr(daemon, "equipped", []), "harvest")
     mult *= traits.harvest_mult(daemon)
+    from . import affinity
+    mult *= affinity.job_mult(daemon, "harvest")
+    mult *= affinity.biome_mult(daemon, rift["biome_key"])
     mult *= mastery.yield_mult(progress.get("mastery_xp", 0))
     mult *= mastery.resonance([mastery.level_from_xp(x)
                                for x in db.all_mastery_xp().values()])
