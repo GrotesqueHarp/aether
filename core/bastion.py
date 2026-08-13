@@ -217,7 +217,8 @@ def effect_line(key: str, lvl: int) -> str:
                 if key == "array" else "not built")
     f = FACILITIES[key]
     if f["kind"] == "hall":
-        return f"{hall_slots(lvl)} slot(s) · +{hall_rate(lvl):.1f} {f['stat'].upper()}/h"
+        return (f"{hall_slots(lvl)} slot(s) · "
+                f"{hall_levels_per_day(lvl):.2f} levels of {f['stat'].upper()}/day")
     if key == "array":
         gate = array_gate(lvl)
         extra = (f" · next needs {gate['need_layers']} layers dug "
@@ -244,18 +245,36 @@ def hall_slots(lvl: int) -> int:
     return 0 if lvl == 0 else 1 + (lvl - 1) // 3
 
 
-HALL_BASE = float(os.environ.get("AETHER_HALL_BASE", "1.0"))
-HALL_GROWTH = float(os.environ.get("AETHER_HALL_GROWTH", "1.40"))
+# Halls are denominated in LEVELS' WORTH of growth per day, not raw stat
+# points. A stat point is roughly a quarter of a level, so granting hundreds of
+# points a day meant a Lv1 daemon parked in a hall for a week hit 921 ATK while
+# one that fought its way to Lv30 had 224 — level stopped describing strength
+# at all. Now a hall is measured against the thing it competes with.
+HALL_LEVELS_PER_DAY = float(os.environ.get("AETHER_HALL_LEVELS_PER_DAY", "0.55"))
+HALL_GROWTH = float(os.environ.get("AETHER_HALL_GROWTH", "1.28"))
 
 
-def hall_rate(lvl: int) -> float:
-    """Permanent base-stat points per hour.
+def hall_levels_per_day(lvl: int) -> float:
+    """How many levels' worth of a stat this hall grows in a day."""
+    return 0.0 if lvl == 0 else HALL_LEVELS_PER_DAY * (HALL_GROWTH ** (lvl - 1))
 
-    Multiplicative, not additive. Upgrade costs grow ~1.55x per level, so a
-    linear payoff meant every level bought less than the last and the halls
-    quietly stopped mattering. Now investment compounds: L1 is ~24 points a
-    day, L10 is ~500."""
-    return 0.0 if lvl == 0 else HALL_BASE * (HALL_GROWTH ** (lvl - 1)) * TRAIN_MULT
+
+def hall_rate(lvl: int, daemon=None) -> float:
+    """Base-stat points per hour, scaled to the daemon's own growth rate.
+
+    Kept in points because that's what tick_training banks, but derived from
+    levels so a hall is always worth a comprehensible number of levels a day
+    regardless of whose stats it's growing.
+    """
+    if lvl == 0:
+        return 0.0
+    per_level = 4.0
+    if daemon is not None:
+        try:
+            per_level = max(0.5, sum(daemon.growth.values()) / len(daemon.growth))
+        except Exception:
+            per_level = 4.0
+    return hall_levels_per_day(lvl) * per_level / 24.0 * TRAIN_MULT
 
 
 def assign(daemon_id: int, hall: str) -> dict:
@@ -292,7 +311,7 @@ def tick_training(now: float | None = None):
             db.update_training(d.id, last_tick=now)
             continue
         from . import glyph, traits
-        rate = hall_rate(db.facility_level(t["hall"]))
+        rate = hall_rate(db.facility_level(t["hall"]), d)
         rate *= 1.0 + glyph.bonus(getattr(d, "equipped", []), "training")
         rate *= traits.mult(d, "training")
         from . import affinity
@@ -301,6 +320,7 @@ def tick_training(now: float | None = None):
         whole = int(banked)
         if whole > 0:
             d.base_stats[hall["stat"]] += whole
+            d.trained[hall["stat"]] = d.trained.get(hall["stat"], 0) + whole
             d.care["discipline"] = min(100, d.care["discipline"] + whole * 0.8)
         d.care["energy"] = max(0, d.care["energy"] - 2.0 * hours)
         d.care["hunger"] = max(0, d.care["hunger"] - 1.5 * hours)

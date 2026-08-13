@@ -92,6 +92,7 @@ class Daemon:
     deepest_layer: int = 0      # the deepest ground it has personally taken
     defences: int = 0           # incursions held
     given_name: str = ""        # yours, if you named it
+    trained: dict = field(default_factory=lambda: {k: 0 for k in STAT_KEYS})
     ascensions: int = 0         # lineage rank — see ascend()
     id: Optional[int] = None    # set by the DB layer
 
@@ -129,6 +130,17 @@ class Daemon:
 
     def battle_stats(self) -> dict:
         return {k: self.stat(k) for k in STAT_KEYS}
+
+    def effective_level(self) -> int:
+        """What its stats are worth, expressed in levels.
+
+        Training raises base stats without touching `level`, so a heavily
+        trained daemon reads as Lv1 while hitting like a Lv40. This is the
+        number that actually describes it.
+        """
+        grow = sum(self.growth.values())
+        extra = sum((self.trained or {}).values())
+        return int(self.level + (extra / grow if grow else 0))
 
     def power(self) -> int:
         s = self.battle_stats()
@@ -255,8 +267,11 @@ class Daemon:
             return {"ok": False, "reason": "bad_stat"}
         if self.care["energy"] < TRAIN_ENERGY_FLOOR:
             return {"ok": False, "reason": "too_tired"}
-        gain = 1
+        # a quarter of a level's growth, so a click means the same thing to a
+        # weak daemon as to a strong one
+        gain = max(1, round(self.growth[stat] * 0.25))
         self.base_stats[stat] += gain
+        self.trained[stat] = self.trained.get(stat, 0) + gain
         self.care["energy"] -= TRAIN_ENERGY_COST
         self.care["discipline"] += 6
         self.care["happiness"] -= 3
@@ -277,6 +292,7 @@ class Daemon:
         d["ascend_level"] = ASCEND_LEVEL
         from . import glyph, traits
         d["traits"] = traits.describe(self)
+        d["effective_level"] = self.effective_level()
         d["display_name"] = self.given_name or self.name
         d["given_name"] = self.given_name
         d["bio"] = {"born": self.born, "origin_layer": self.origin_layer,
@@ -294,6 +310,7 @@ class Daemon:
             "seed", "attribute", "element", "rarity", "base_stats", "growth",
             "sigil", "origin_mac", "name", "stage", "level", "xp", "care",
             "born", "origin_layer", "deepest_layer", "defences", "given_name",
+            "trained",
             "wins", "losses", "ascensions", "id") if k in d}
         return cls(**keep)
 

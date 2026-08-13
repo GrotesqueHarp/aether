@@ -22,6 +22,27 @@ back.
   measures a game without prestige.
 - Reformat: global prestige. Needs the above first.
 
+## [0.21.1]
+
+### Fixed
+- **Training was denominated in the wrong unit.** Halls granted raw base-stat
+  points at hundreds per day, while a level grants about four — so a level-1
+  daemon parked in a level-5 hall for a week reached 921 ATK while one that
+  fought its way to level 30 had 224. Level stopped describing strength at all.
+  Halls are now measured in *levels' worth of growth per day* (0.55 at L1,
+  scaling 1.28x per level), and scale to each daemon's own growth rate.
+  A week in a L5 hall is now worth about ten levels of one stat, which loses
+  to fighting for thirty levels of all four.
+- Click-training likewise grants a quarter of a level's growth rather than a
+  flat point, so a click means the same thing to a weak daemon as a strong one.
+- Facility descriptions read "1.48 levels of ATK/day" instead of an opaque
+  points-per-hour figure.
+
+### Added
+- **Effective level** — a daemon that has been trained shows `Lv3 ≈12`, since
+  training raises stats without touching level. Daemons now track exactly how
+  much of their stats came from training rather than growth.
+
 ## [0.21.0]
 
 ### Added
