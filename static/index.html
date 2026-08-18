@@ -354,6 +354,12 @@ body.dragging-daemon{cursor:grabbing}
 .pc-top .btn{margin-left:auto;padding:3px 9px;font-size:10.5px}
 .pc-meta{font-size:10.5px;color:var(--dim);margin-top:3px}
 
+.stage{width:100%;height:290px;display:block;border-radius:11px;background:#050a12;
+  border:1px solid var(--hair)}
+.stagebar{display:flex;align-items:center;gap:12px;padding:9px 4px 2px}
+.skiplab{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px}
+.skiplab input{width:auto;margin:0}
+
 /* ---- dashboard ---- */
 body.dashmode nav.rail, body.dashmode .resbar{display:none}
 /* the shell is a 216px rail + content grid; hiding the rail leaves its track
@@ -483,6 +489,7 @@ body.dashmode .main{padding:0}
     <div class="foot muted">
       <div><span class="dot"></span>Anchor online</div>
       <div class="mono" id="foot-net"></div>
+      <div class="reset-link" id="sound-toggle" onclick="sndToggle(!SND.on);this.textContent=(SND.on?'Sound on':'Sound off')">Sound off</div>
       <div class="reset-link" onclick="confirmReset()">Reset progression</div>
     </div>
   </nav>
@@ -633,6 +640,7 @@ function meter(label,val,key){
 async function boot(){
   const st=await api('/api/state');
   state.net=st;state.res=st.resources||{};state.rates=st.rates||{};
+  try { state.skipBattles = !!localStorage.getItem('aether.skipBattles'); } catch(_) {}
   renderResBar();
   // once per page load, never on the polling loop — /api/visit stamps the
   // "last seen" time, so calling it every 10s would mean you were never away
@@ -780,6 +788,10 @@ async function riftView(dev){
       </div></div>
       <button class="btn ghost" onclick="go('scan')">← All rifts</button>
     </div>
+    ${r.seam_hours>0?`<div class="card" style="border-color:var(--warn);padding:10px 15px;margin-bottom:12px;max-width:680px">
+       <b style="color:var(--warn)">A rich seam is open here.</b>
+       <span class="muted" style="font-size:12.5px"> Everything posted in this rift yields
+       more for another ${Math.round(r.seam_hours)}h.</span></div>`:''}
     <div id="inc-host"></div>
     <div id="downclock-host"></div>
 
@@ -1336,31 +1348,256 @@ async function startBattle(dev,layer){
   await refreshRoster();pollState();
   dev.rift=await api(`/api/rift/${dev.mac}`);
 }
-async function showTeamBattle(b,teamA,teamB,won,subtitle){
-  const mini=(d,key)=>`<div class="fighter-mini" data-f="${key}"><div class="sig">${daemonSigil(d)}</div><div class="fname">${d.name}</div><div class="mono muted" style="font-size:9.5px">Lv${d.level}</div><div class="hpbar ${key[0]==='b'?'foe':''}"><i style="width:100%"></i></div></div>`;
+/* ================= SOUND =================
+   Off by default, and deliberately minimal: filtered noise for water, and a
+   soft tone when something happens. Synthesised with the Web Audio API rather
+   than shipped as files, so it costs nothing to download and works offline
+   like everything else here.
+
+   For a tank left running on a spare monitor, the water matters more than any
+   visual — but it must never start without being asked. */
+const SND = { ctx:null, on:false, gain:null, water:null };
+
+function sndInit(){
+  if (SND.ctx) return;
+  try {
+    SND.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    SND.gain = SND.ctx.createGain();
+    SND.gain.gain.value = 0.5;
+    SND.gain.connect(SND.ctx.destination);
+  } catch(_) { SND.ctx = null; }
+}
+
+function sndWater(on){
+  sndInit();
+  if (!SND.ctx) return;
+  if (on && !SND.water){
+    // brown-ish noise through a low-pass reads as moving water
+    const len = SND.ctx.sampleRate * 4;
+    const buf = SND.ctx.createBuffer(1, len, SND.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++){
+      const w = Math.random() * 2 - 1;
+      last = (last + 0.02 * w) / 1.02;
+      data[i] = last * 3.2;
+    }
+    const src = SND.ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const lp = SND.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 520;
+    const g = SND.ctx.createGain(); g.gain.value = 0.16;
+    src.connect(lp); lp.connect(g); g.connect(SND.gain);
+    src.start();
+    SND.water = { src, g };
+  } else if (!on && SND.water){
+    try { SND.water.src.stop(); } catch(_) {}
+    SND.water = null;
+  }
+}
+
+function sndCue(kind){
+  if (!SND.on) return;
+  sndInit();
+  if (!SND.ctx) return;
+  const notes = { level:[523,784], hit:[180], crit:[240,360],
+                  win:[523,659,784], lose:[300,190], award:[659,988] };
+  const seq = notes[kind] || [440];
+  seq.forEach((f, i) => {
+    const o = SND.ctx.createOscillator(), g = SND.ctx.createGain();
+    o.type = kind === 'hit' || kind === 'crit' ? 'triangle' : 'sine';
+    o.frequency.value = f;
+    const t0 = SND.ctx.currentTime + i * 0.09;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    o.connect(g); g.connect(SND.gain);
+    o.start(t0); o.stop(t0 + 0.4);
+  });
+}
+
+function sndToggle(on){
+  SND.on = on;
+  try { localStorage.setItem('aether.sound', on ? '1' : ''); } catch(_) {}
+  sndWater(on);
+  if (on) sndCue('level');
+}
+
+/* ================= THE BATTLE STAGE =================
+   Combat was the least visual thing in a game full of moving water: two rows
+   of HP bars and a text log, with none of the creatures you have spent months
+   raising actually present. This draws the fight — your party on the left, the
+   layer's foes on the right, lunging when they strike, flinching when hit, and
+   sinking when they fall.
+
+   It reuses drawCreature(), so a rank-5 Mega arrives with its crown and its
+   lineage trail. It is watchable but never mandatory: Skip jumps to the result
+   and the preference is remembered. */
+
+const STAGE = { raf:null, t:0, fighters:[], hits:[], done:false };
+
+function stageSetup(teamA, teamB, maxHp){
+  STAGE.fighters = [];
+  STAGE.hits = [];
+  STAGE.t = 0;
+  const place = (list, side) => list.forEach((d, i) => {
+    const n = Math.max(1, list.length);
+    STAGE.fighters.push({
+      key: side + i, d, side,
+      hx: side === 'a' ? 0.20 + (i % 2) * 0.07 : 0.80 - (i % 2) * 0.07,
+      hy: 0.34 + (i / n) * 0.40,
+      hp: maxHp[side + i] || 1, max: maxHp[side + i] || 1,
+      lunge: 0, flinch: 0, phase: Math.random() * 6,
+    });
+  });
+  place(teamA, 'a'); place(teamB, 'b');
+}
+
+function stageFrame(){
+  STAGE.raf = null;
+  const cv = document.getElementById('stage');
+  if (!cv) return;
+  if (document.hidden){ STAGE.raf = requestAnimationFrame(stageFrame); return; }
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = cv.getBoundingClientRect();
+  if (cv.width !== Math.round(r.width * dpr)){
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = r.width, H = r.height;
+  STAGE.t += 1;
+  const t = STAGE.t;
+  ctx.clearRect(0, 0, W, H);
+
+  // the ground: a dim trench, lit from above
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#142a44'); g.addColorStop(0.55, '#0d1c2e'); g.addColorStop(1, '#080f1a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const beam = ctx.createRadialGradient(W/2, -H*0.3, 10, W/2, H*0.4, W*0.6);
+  beam.addColorStop(0, 'rgba(150,195,255,.22)'); beam.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = beam; ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  const floor = H - 18;
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, floor);
+  for (let x = 0; x <= W; x += 26) ctx.lineTo(x, floor + Math.sin(x/80)*4);
+  ctx.lineTo(W, H); ctx.closePath();
+  ctx.fillStyle = '#1a2b3a'; ctx.fill();
+  // drifting motes, so the water is never entirely still
+  for (let i = 0; i < 22; i++){
+    const mx = ((i * 71 + t * 0.25) % W);
+    const my = ((i * 43 + t * 0.6) % H);
+    ctx.beginPath(); ctx.arc(mx, H - my, 1 + (i % 3) * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(170,215,255,.16)'; ctx.fill();
+  }
+
+  // strike flashes, drawn under the creatures
+  STAGE.hits = STAGE.hits.filter(h => h.life-- > 0);
+  for (const h of STAGE.hits){
+    const a = h.life / h.born;
+    ctx.beginPath();
+    ctx.arc(h.x * W, h.y * H, (1 - a) * 34 + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = h.crit ? `rgba(255,225,140,${a})` : `rgba(255,255,255,${a * .55})`;
+    ctx.lineWidth = h.crit ? 3 : 1.6; ctx.stroke();
+  }
+
+  for (const f of STAGE.fighters){
+    const dead = f.hp <= 0;
+    let x = f.hx * W, y = f.hy * H;
+    if (f.lunge > 0){                       // drive toward the enemy line
+      const dir = f.side === 'a' ? 1 : -1;
+      x += dir * (f.lunge / 12) * W * 0.06;
+      f.lunge--;
+    }
+    if (f.flinch > 0){
+      x += (Math.random() - 0.5) * 5;
+      y += (Math.random() - 0.5) * 5;
+      f.flinch--;
+    }
+    if (dead) y += 18;                      // sunk to the floor
+    y += Math.sin(t / 34 + f.phase) * 5;
+
+    const c = { d: f.d, phase: t / 22 + f.phase,
+                facing: f.side === 'a' ? 1 : -1,
+                mood: dead ? 'sleeping' : 'idle', poked: 0 };
+    ctx.save();
+    ctx.globalAlpha = dead ? 0.30 : 1;
+    if (dead){ ctx.translate(x, y); ctx.rotate(0.5); ctx.translate(-x, -y); }
+    const scale = Math.min(1.25, (H * 0.20) / (STAGE_SIZE[f.d.stage] || 20));
+    ctx.translate(x, y); ctx.scale(scale, scale); ctx.translate(-x, -y);
+    drawCreature(ctx, c, x, y, false);
+    ctx.restore();
+
+    // name and health, above each one
+    ctx.globalAlpha = dead ? 0.4 : 0.9;
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#9fb0c4';
+    ctx.fillText(f.d.display_name || f.d.name, x, y - H * 0.10);
+    const bw = 46, frac = Math.max(0, f.hp / f.max);
+    ctx.fillStyle = 'rgba(0,0,0,.5)';
+    ctx.fillRect(x - bw/2, y - H*0.09, bw, 4);
+    ctx.fillStyle = f.side === 'a' ? '#3FD08A' : '#F0714A';
+    ctx.fillRect(x - bw/2, y - H*0.09, bw * frac, 4);
+    ctx.globalAlpha = 1;
+  }
+
+  STAGE.raf = requestAnimationFrame(stageFrame);
+}
+
+function stagePlay(step, maxHp){
+  const actor = STAGE.fighters.find(f => f.key === step.actor);
+  const target = STAGE.fighters.find(f => f.key === step.target);
+  if (actor) actor.lunge = 12;
+  if (target){
+    target.flinch = 8;
+    STAGE.hits.push({ x: target.hx, y: target.hy, life: 16, born: 16,
+                      crit: step.crit });
+  }
+  for (const [k, v] of Object.entries(step.hp)){
+    const f = STAGE.fighters.find(x => x.key === k);
+    if (f) f.hp = v;
+  }
+}
+
+async function showTeamBattle(b, teamA, teamB, won, subtitle){
+  const skipPref = state.skipBattles;
+  stageSetup(teamA, teamB, b.max_hp);
   modal(`<div class="theatre card">
-    <div style="padding:16px">
-      <div class="team-row">${teamA.map((d,i)=>mini(d,'a'+i)).join('')}</div>
-      <div style="text-align:center;font-family:var(--display);color:var(--muted);letter-spacing:.2em;padding:8px 0;font-size:13px">VS</div>
-      <div class="team-row">${teamB.map((d,i)=>mini(d,'b'+i)).join('')}</div>
-    </div>
+    <canvas id="stage" class="stage"></canvas>
     <div class="log" id="log"></div>
     <div id="battle-result"></div>
+    <div class="stagebar">
+      <button class="btn ghost" id="skip">Skip to result</button>
+      <label class="mono skiplab"><input type="checkbox" id="skipalways"
+        ${skipPref ? 'checked' : ''}> always skip</label>
+    </div>
   </div>`);
-  const maxHp=b.max_hp, log=$('#log');
-  for(const step of b.log){
-    await sleep(300);
-    for(const [k,v] of Object.entries(step.hp)){
-      const f=document.querySelector(`[data-f="${k}"]`);
-      if(f){f.querySelector('.hpbar i').style.width=(100*v/maxHp[k])+'%';f.classList.toggle('dead',v<=0);}
-    }
-    const cls=step.actor[0]==='a'?'a':'b';
-    const note=step.note?` <span class="muted">[${step.note} ×${step.mult}]</span>`:'';
-    log.innerHTML+=`<div class="row"><span class="${cls}">${step.actor_name}</span> → ${step.target_name} for <b class="${step.crit?'crit':''}">${step.dmg}${step.crit?' CRIT':''}</b>${note}</div>`;
-    log.scrollTop=log.scrollHeight;
+  if (!STAGE.raf) STAGE.raf = requestAnimationFrame(stageFrame);
+
+  let skipped = skipPref;
+  $('#skip').onclick = () => { skipped = true; };
+  $('#skipalways').onchange = e => {
+    state.skipBattles = e.target.checked;
+    try { localStorage.setItem('aether.skipBattles', e.target.checked ? '1' : ''); } catch(_) {}
+  };
+
+  const log = $('#log');
+  for (const step of b.log){
+    if (!skipped) await sleep(340);
+    stagePlay(step, b.max_hp);
+    if (!skipped) sndCue(step.crit ? 'crit' : 'hit');
+    const cls = step.actor[0] === 'a' ? 'a' : 'b';
+    const note = step.note ? ` <span class="muted">[${step.note} ×${step.mult}]</span>` : '';
+    log.innerHTML += `<div class="row"><span class="${cls}">${step.actor_name}</span> → ${step.target_name} for <b class="${step.crit?'crit':''}">${step.dmg}${step.crit?' CRIT':''}</b>${note}</div>`;
+    log.scrollTop = log.scrollHeight;
   }
-  await sleep(300);
-  $('#battle-result').innerHTML=`<div class="result ${won?'win':'lose'}"><h2>${won?'Victory':'Defeat'}</h2><div class="muted" style="margin:6px 0 14px">${subtitle||''}</div><button class="btn primary" onclick="closeModal()">Continue</button></div>`;
+  if (!skipped) await sleep(300);
+  const bar = document.querySelector('.stagebar');
+  if (bar) bar.style.display = 'none';
+  sndCue(won ? 'win' : 'lose');
+  $('#battle-result').innerHTML = `<div class="result ${won?'win':'lose'}"><h2>${won?'Victory':'Defeat'}</h2><div class="muted" style="margin:6px 0 14px">${subtitle||''}</div><button class="btn primary" onclick="closeModal()">Continue</button></div>`;
 }
 
 /* -- the nest (care + train + evolve) -- */
@@ -1369,18 +1606,38 @@ async function nestView(){
   $('#main').innerHTML=`
     <div class="topbar"><div><div class="eyebrow">Home space</div><h1>The Nest</h1></div>
     <div class="net">${state.roster.length} daemon(s) in your care</div></div>
+    <div id="stranger-host"></div>
     <canvas id="tank" class="tank"></canvas>
     <div class="section-title">Hatchery</div>
     <div class="card hatchery" id="hatchery"><div class="spin"></div></div>
     <div class="section-title">Your daemons</div>
     <div id="roster" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))"></div>`;
   renderHatchery();
+  renderStranger();
   tankMount();
   const host=$('#roster');
   if(!state.roster.length){host.innerHTML=`<div class="empty">No daemons yet. Scan a rift, defeat its Gatekeeper, and capture its signature daemon — or your Anchor egg is waiting on first run.</div>`;return;}
   host.innerHTML=state.roster.map(daemonCard).join('');
   bindDaemonActions();
 }
+async function renderStranger(){
+  const host=$('#stranger-host'); if(!host)return;
+  let d;
+  try{ d=(await api('/api/stranger')).stranger; }catch(e){ return; }
+  if(!d){ host.innerHTML=''; return; }
+  host.innerHTML=`<div class="card" style="border-color:var(--aether);padding:14px 17px;margin-bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="flex:1;min-width:240px"><b>Something is waiting in the Nest.</b>
+      <div class="muted" style="font-size:12.5px;margin-top:3px">
+        It followed your daemons up out of ${d.world}. It has not asked for anything,
+        and it does not appear to be leaving.</div></div>
+    <button class="btn primary" id="take-stranger">Let it stay</button></div>`;
+  $('#take-stranger').onclick=async()=>{
+    const r=await api('/api/stranger/take',{method:'POST',body:JSON.stringify({})});
+    if(!r.ok){toast(r.reason||'It has gone');return;}
+    toast(`${r.name} joins the Nest`); sndCue('award'); nestView();
+  };
+}
+
 async function renderHatchery(){
   const h=await api('/api/hatchery');
   const host=$('#hatchery'); if(!host)return;

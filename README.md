@@ -297,6 +297,23 @@ the machine did in your absence — harvested, dug, hatched, captured, defended 
 plus highlights from the Pulse. It fires once per page load, never on the
 polling loop.
 
+## Battles, events and sound (v0.25)
+
+**Battles are drawn.** Your party faces the layer's foes across a lit trench,
+lunging and flinching and sinking when they fall — the same creatures you see
+in the Nest, crowns and lineage trails included. Skip jumps to the result, and
+"always skip" is remembered, so a fight is something to watch when you feel
+like watching one.
+
+**Rifts have weather.** Work one long enough and things happen: a rich seam
+paying 1.6x for a day, a collapse costing a single layer, a stranger that
+followed your daemons home and waits in the Nest, an insight that deepens your
+mastery. Frequent enough to be worth reading the Pulse for; never enough to
+cost you a daemon.
+
+**Sound** is available and off by default — water, and soft tones for strikes
+and arrivals, synthesised rather than downloaded. The toggle is in the sidebar.
+
 ## The Shallows (v0.24)
 
 Its own tab: a wide pool with light moving through the water, weed on the

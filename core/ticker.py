@@ -428,6 +428,8 @@ def _run():
             tick_harvests(now)
             tick_bonds(now)
             affinity.check_wishes(now)
+            from . import events as rift_events
+            rift_events.tick(now)
             tick_eggs(now)
             from . import bastion, war
             bastion.tick_training(now)

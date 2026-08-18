@@ -41,6 +41,7 @@ from core import synergy
 from core import affinity
 from core import reformat
 from core import awards
+from core import events
 from core import objectives as objectives_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
@@ -328,6 +329,7 @@ def rift(mac):
         (prog["captures_taken"] + 1) * world_mod.CAPTURE_EVERY)
     r["fully_cleared"] = prog["cleared"] >= world_mod.LAYERS
     r["harvest_every"] = world_mod.HARVEST_EVERY
+    r["seam_hours"] = round(events.seam_remaining(r["mac"]), 1)
     r["mastery"] = mastery.progress(r["progress"].get("mastery_xp", 0))
     r["resonance"] = round(mastery.resonance(
         [mastery.level_from_xp(x) for x in db.all_mastery_xp().values()]), 3)
@@ -829,6 +831,17 @@ def reformat_commit():
                  f"{res['carried']['name']} carried through, and every rift "
                  f"yields x{res['mult']} from here on.")
     return jsonify(res)
+
+
+@app.route("/api/stranger")
+def stranger():
+    return jsonify({"stranger": events.pending_stranger()})
+
+
+@app.route("/api/stranger/take", methods=["POST"])
+def stranger_take():
+    res = events.take_stranger()
+    return jsonify(res) if res.get("ok") else (jsonify(res), 400)
 
 
 # -- glyphs --

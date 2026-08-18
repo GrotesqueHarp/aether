@@ -16,11 +16,35 @@ back.
 ## [Unreleased]
 
 ### Added
-- Retune award thresholds against the measured curve now that digging
-  accelerates (~660 layers in 35 days, and rising).
-- Teach the simulator about Ascension, Glyphs and Mastery — it currently
-  measures a game without prestige.
-- Reformat: global prestige. Needs the above first.
+- Retune award thresholds against the measured curve.
+
+*(Prestige, the simulator's awareness of it, and Reformat all shipped in
+0.12-0.17; this list had gone stale.)*
+
+## [0.25.0]
+
+### Added
+- **The battle stage.** Fights are drawn now: your party on the left of a lit
+  trench, the layer's foes on the right, lunging when they strike, flinching
+  when hit, and sinking greyed to the floor when they fall. It reuses the same
+  drawing code as the Nest, so a rank-5 Mega arrives with its crown and its
+  lineage trail. Combat was the least visual thing in a game full of moving
+  water, and the only system where the daemons you had raised never appeared.
+- **Watchable, never mandatory.** A Skip button jumps straight to the result,
+  and "always skip" is remembered across sessions.
+- **Rift events.** While you are working a rift, things happen in it: a rich
+  seam that pays 1.6x for twenty hours, a collapse that costs a single layer,
+  a stranger that follows your daemons home and waits in the Nest until you
+  accept it, or an insight that deepens your mastery. Checked every six hours,
+  only on rifts you are actually using, and nothing here can lose you a daemon.
+- **Sound**, off by default: filtered noise for water and soft tones for
+  strikes, victories and arrivals, synthesised with the Web Audio API rather
+  than shipped as files. Toggle in the sidebar; the preference persists.
+
+### Fixed
+- The stranger record was stored colon-delimited alongside a MAC address, which
+  contains colons — so it could never be parsed back and no stranger ever
+  appeared.
 
 ## [0.24.0]
 
