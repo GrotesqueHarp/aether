@@ -21,6 +21,23 @@ back.
 *(Prestige, the simulator's awareness of it, and Reformat all shipped in
 0.12-0.17; this list had gone stale.)*
 
+## [0.25.1]
+
+### Changed
+- **Music replaces the water loop.** An original chiptune generator: square
+  leads over a triangle root-fifth bass in a lilting 6/8, with four-bar phrases
+  that answer each other, noise-click percussion, and a mode and progression
+  that change every eight bars so a tank left running for a week never repeats
+  the same sixteen bars. Written in the folk-shanty idiom — compound meter,
+  bright major and mixolydian modes, call-and-answer phrasing — all of which
+  are centuries-old conventions rather than anyone's composition. Synthesised
+  with the Web Audio API, so nothing is downloaded and it works offline.
+- The sidebar now has separate **Music** and **Effects** toggles, both off by
+  default and both remembered.
+
+### Removed
+- The filtered-noise water loop, superseded by the music.
+
 ## [0.25.0]
 
 ### Added

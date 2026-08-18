@@ -311,8 +311,13 @@ followed your daemons home and waits in the Nest, an insight that deepens your
 mastery. Frequent enough to be worth reading the Pulse for; never enough to
 cost you a daemon.
 
-**Sound** is available and off by default — water, and soft tones for strikes
-and arrivals, synthesised rather than downloaded. The toggle is in the sidebar.
+**Music and effects** are available, both off by default and both remembered.
+The music is an original chiptune generator — square leads over a bouncing
+triangle bass in a lilting 6/8, phrases that answer each other, and a mode and
+chord progression that shift every eight bars so it never repeats itself for
+long. It's written in the folk-shanty idiom rather than borrowed from anywhere,
+and synthesised in the browser, so nothing is downloaded and it works offline
+like the rest of the app.
 
 ## The Shallows (v0.24)
 
