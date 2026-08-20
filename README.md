@@ -10,6 +10,10 @@ You raise **daemons** (unix pun fully intended) in **the Nest**, train their
 stats, and send them to auto-battle through rifts. You never pick moves — you
 raised them, now you watch them fight.
 
+> **Working on this project?** Start with [PROJECT.md](PROJECT.md) — it covers
+> the design constraints, architecture, current state, tooling and conventions
+> in one place.
+
 ## Get it
 
 ```bash

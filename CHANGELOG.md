@@ -21,6 +21,42 @@ back.
 *(Prestige, the simulator's awareness of it, and Reformat all shipped in
 0.12-0.17; this list had gone stale.)*
 
+## [0.25.3]
+
+### Added
+- **PROJECT.md** — an orientation document for picking the project back up:
+  the design constraints, the architecture and why it is shaped that way, what
+  each system is for, the tooling, the conventions, and the bugs that taught
+  each lesson.
+
+### Fixed
+- Two `_migrate_8_to_9` functions shared a name, so the second silently
+  shadowed the first, and the `MIGRATIONS` dict listed keys 8 and 9 twice.
+  Both were harmless no-op stubs left over from the sigils/glyphs duplication,
+  but real logic added to the shadowed one would have been discarded without a
+  word. Deduplicated; the 1-11 chain is verified intact.
+
+## [0.25.2]
+
+### Fixed
+- **The music rambled**, because the melody was a random walk: each note
+  stepped randomly from the last, so there was no motif to recognise, no phrase
+  to resolve, and nothing for the ear to hold onto. Rewritten as an actual
+  composition — a four-to-six note motif with a deliberate contour, stated and
+  repeated in AABA phrasing over eight bars, notes drawn from the *current
+  chord* rather than the whole scale, phrase boundaries landing on chord tones,
+  and a V-I cadence into a final bar that resolves to the tonic. Verified: all
+  sixteen phrase-boundary notes in a generated tune land on chord tones. Tempo
+  eased to 118bpm and a soft chord pad added so the harmony is audible.
+- The motif now persists — it only re-rolls a third of the time at the eight
+  bar mark, so a tune is heard often enough to be recognised.
+- **Buttons were silent.** Sound effects only fired on battles and awards. A
+  single delegated listener now covers the whole interface, with cues grouped
+  by what an action *means* rather than which button it was: soft blips for
+  navigation, firmer ones for committing, a rising figure for building, a
+  descending one for anything destructive. Delegation rather than per-element
+  wiring, since the refresh loop rebuilds the UI constantly.
+
 ## [0.25.1]
 
 ### Changed

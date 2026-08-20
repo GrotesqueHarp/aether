@@ -1365,42 +1365,42 @@ async function startBattle(dev,layer){
 }
 
 /* ================= MUSIC =================
-   Original chiptune, generated rather than played back.
+   Original chiptune, composed rather than wandered.
 
-   The brief was "upbeat 8-bit in the spirit of an old MMO sea shanty", so this
-   builds from the conventions that make those tunes work — a lilting 6/8 sway,
-   a bright major key, short four-bar phrases that answer each other, and a
-   bouncing root-fifth bass that suggests a boat. Those are centuries-old folk
-   devices, not anyone's property; the actual melody here is composed for this
-   game and generated fresh each session.
+   The first attempt was a random walk: every note stepped randomly from the
+   last, so there was no motif to recognise, no phrase to resolve, and nothing
+   for the ear to hold. It rambled. This version is written the way a tune
+   actually is:
 
-   Everything is synthesised with the Web Audio API: square leads, a triangle
-   bass, and a noise percussion click. Nothing is downloaded, so it works on an
-   offline LXC like the rest of the app.
+     - A MOTIF: four or five notes with a definite shape, stated once and then
+       repeated. Repetition is what makes a melody memorable.
+     - AABA phrasing over 8 bars: state it, state it again, go somewhere else,
+       come home. This is the oldest structure in popular music for a reason.
+     - Notes chosen from the CURRENT CHORD, not the whole scale, so the melody
+       and harmony agree. That single change is most of why this sounds better.
+     - Phrases END ON CHORD TONES, and the last bar of a section lands on the
+       tonic. Resolution is what stops a tune sounding like it is still going.
+     - A cadence: bars 7-8 move V -> I so the loop point feels deliberate.
 
-   It varies. The tune picks a different mode, phrase set and ornament each
-   time it loops, so a tank left running for a week does not play the same
-   sixteen bars four thousand times. */
+   Still generated, so it varies between sessions — but it varies the motif and
+   the key, not the grammar. Synthesised with Web Audio, nothing downloaded. */
 
 const MUSIC = {
   ctx: null, master: null, on: false, timer: null,
-  step: 0, bar: 0, key: 0, section: 0, seedn: 1,
+  bar: 0, key: 0, seedn: 1, motif: null, tune: null,
 };
 
-const SCALE_MAJOR = [0, 2, 4, 5, 7, 9, 11];
-const SCALE_MIXO = [0, 2, 4, 5, 7, 9, 10];      // brighter, folk-ish seventh
-const SCALE_DORIAN = [0, 2, 3, 5, 7, 9, 10];    // wistful middle sections
+// Mixolydian: major with a flat seventh. The folk-shanty sound.
+const MODE = [0, 2, 4, 5, 7, 9, 10];
 
-// Chord roots as scale degrees. A shanty leans on I-V-vi-IV shapes and their
-// cousins; these are the progressions, not any particular tune.
-const PROGRESSIONS = [
-  [0, 4, 5, 3],
-  [0, 3, 4, 4],
-  [5, 3, 0, 4],
-  [0, 5, 3, 4],
+// I - V - vi - IV shapes, ending on a V->I cadence so eight bars close properly
+const CHORDS = [
+  [0, 3, 5, 3, 0, 5, 4, 0],
+  [0, 5, 3, 4, 0, 5, 4, 0],
+  [0, 0, 5, 5, 3, 3, 4, 0],
 ];
 
-function mrand(){                                  // deterministic per session
+function mrand(){
   MUSIC.seedn = (MUSIC.seedn * 1664525 + 1013904223) % 4294967296;
   return MUSIC.seedn / 4294967296;
 }
@@ -1410,7 +1410,7 @@ function musInit(){
   try {
     MUSIC.ctx = new (window.AudioContext || window.webkitAudioContext)();
     MUSIC.master = MUSIC.ctx.createGain();
-    MUSIC.master.gain.value = 0.22;
+    MUSIC.master.gain.value = 0.20;
     MUSIC.master.connect(MUSIC.ctx.destination);
   } catch(_) { MUSIC.ctx = null; }
 }
@@ -1423,83 +1423,116 @@ function blip(freq, when, dur, type, vol, detune){
   o.type = type || 'square';
   o.frequency.value = freq;
   if (detune) o.detune.value = detune;
-  // a short percussive envelope keeps it reading as chip rather than organ
   g.gain.setValueAtTime(0.0001, when);
-  g.gain.exponentialRampToValueAtTime(vol, when + 0.012);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.014);
+  g.gain.setValueAtTime(vol, when + dur * 0.55);
   g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
   o.connect(g); g.connect(MUSIC.master);
   o.start(when); o.stop(when + dur + 0.02);
 }
 
-function tick(when, vol){
+function musTick(when, vol){
   const c = MUSIC.ctx;
-  const len = Math.floor(c.sampleRate * 0.05);
+  const len = Math.floor(c.sampleRate * 0.045);
   const buf = c.createBuffer(1, len, c.sampleRate);
   const d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
   const src = c.createBufferSource(); src.buffer = buf;
-  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3800;
+  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4200;
   const g = c.createGain(); g.gain.value = vol;
   src.connect(hp); hp.connect(g); g.connect(MUSIC.master);
   src.start(when);
 }
 
-/* One bar of 6/8: six eighth-notes, accented 1 and 4, which is where the sway
-   comes from. Scheduled a bar ahead so timing does not depend on the tab. */
+/* A motif is a rhythm plus a contour. Six eighth-note slots per bar; each slot
+   is either a rest or a scale-step offset from the chord root. Contours are
+   shaped deliberately — rise, arch, fall — rather than rolled at random. */
+function makeMotif(){
+  const shapes = [
+    [0, 2, 4, 2, 0, null],      // arch, returning home
+    [0, 1, 2, null, 4, 2],      // climb with a breath in it
+    [4, 2, 0, 2, null, 0],      // fall and settle
+    [0, 4, 2, 4, 0, null],      // leap and answer
+    [2, 0, 2, 4, 2, 0],         // busy, close-knit
+    [0, null, 2, 4, null, 2],   // sparse and lilting
+  ];
+  return shapes[Math.floor(mrand() * shapes.length)];
+}
+
+/* Eight bars: A A' B A''. The A bars carry the motif, B lifts it an octave-ish
+   step and inverts the contour, and the final A resolves onto the tonic. */
+function makeTune(){
+  const motif = makeMotif();
+  const inverted = motif.map(v => v === null ? null : 4 - v);
+  return {
+    motif,
+    bars: [motif, motif, motif, inverted, inverted, motif, motif, motif],
+    lift: [0, 0, 0, 2, 2, 0, 0, 0],
+  };
+}
+
 function musBar(){
   if (!MUSIC.on || !MUSIC.ctx) return;
   const c = MUSIC.ctx;
-  const bpm = 132;
+  const bpm = 118;
   const eighth = 60 / bpm / 2;
   const barLen = eighth * 6;
   const t0 = c.currentTime + 0.06;
 
-  // every eight bars, change something
-  if (MUSIC.bar % 8 === 0){
-    MUSIC.section = Math.floor(mrand() * PROGRESSIONS.length);
-    MUSIC.scale = mrand() < 0.55 ? SCALE_MIXO
-                : mrand() < 0.7  ? SCALE_MAJOR : SCALE_DORIAN;
-    if (MUSIC.bar % 32 === 0) MUSIC.key = [0, 5, 7, 2][Math.floor(mrand() * 4)];
+  const pos = MUSIC.bar % 8;
+  if (pos === 0){
+    // a new tune every eight bars, but the same tune repeats often enough to
+    // be recognised: only re-roll a third of the time
+    if (!MUSIC.tune || mrand() < 0.34) MUSIC.tune = makeTune();
+    if (MUSIC.bar % 32 === 0 && MUSIC.bar) MUSIC.key = [0, 5, 7, 2][Math.floor(mrand() * 4)];
+    MUSIC.prog = CHORDS[Math.floor(mrand() * CHORDS.length)];
   }
-  const scale = MUSIC.scale || SCALE_MIXO;
-  const prog = PROGRESSIONS[MUSIC.section];
-  const rootDeg = prog[MUSIC.bar % 4];
-  const tonic = 57 + MUSIC.key;                 // A3-ish, a comfortable range
-  const root = tonic + scale[rootDeg % 7];
+  const tune = MUSIC.tune;
+  const prog = MUSIC.prog || CHORDS[0];
+  const tonic = 55 + MUSIC.key;
+  const deg = prog[pos];
+  const root = tonic + MODE[deg];
 
-  // bass: root, fifth, root — the boat rocking
-  const bassPat = [0, 4, 0, 0, 4, 0];
-  for (let i = 0; i < 6; i++){
-    if (i % 3 === 0 || i === 4){
-      const n = root - 12 + scale[bassPat[i] % 7];
-      blip(midiHz(n), t0 + i * eighth, eighth * 0.9, 'triangle', 0.16);
+  // --- bass: root on 1, fifth on 4, with a passing note into the next bar
+  blip(midiHz(root - 12), t0, eighth * 2.4, 'triangle', 0.20);
+  blip(midiHz(root - 12 + 7), t0 + eighth * 3, eighth * 2.0, 'triangle', 0.17);
+  if (pos === 7){                             // walk back to the tonic
+    blip(midiHz(tonic - 12 + MODE[4]), t0 + eighth * 5, eighth * 0.8, 'triangle', 0.14);
+  }
+
+  // --- a soft chord pad on the downbeat, so the harmony is audible
+  [0, 2, 4].forEach((iv, i) => {
+    const n = root + MODE[(deg + iv) % 7] - MODE[deg] + (i ? 0 : 0);
+    blip(midiHz(root + [0, 4, 7][i]), t0, eighth * 2.8, 'sine', 0.045);
+  });
+
+  // --- percussion: firm on 1 and 4, ghosted between
+  for (let i = 0; i < 6; i++) musTick(t0 + i * eighth, (i === 0 || i === 3) ? 0.11 : 0.03);
+
+  // --- melody: the motif, voiced against THIS bar's chord
+  const chordTones = [0, 2, 4];               // root, third, fifth as scale steps
+  const shape = tune.bars[pos];
+  const lift = tune.lift[pos];
+  shape.forEach((step, i) => {
+    if (step === null) return;
+    let sd = deg + step + lift;
+    // land on a chord tone at the start and end of every bar, so phrases agree
+    if (i === 0 || i === 5){
+      const near = chordTones.reduce((a, b) =>
+        Math.abs((deg + b) - sd) < Math.abs((deg + a) - sd) ? b : a);
+      sd = deg + near;
     }
-  }
-
-  // percussion: accent the two strong beats, ghost the rest
-  for (let i = 0; i < 6; i++){
-    tick(t0 + i * eighth, (i === 0 || i === 3) ? 0.10 : 0.035);
-  }
-
-  // melody: a four-note phrase, answered by its inversion in the next bar
-  const answering = (MUSIC.bar % 2) === 1;
-  let deg = rootDeg + (answering ? 2 : 0);
-  for (let i = 0; i < 6; i++){
-    if (i === 2 && mrand() < 0.4) continue;      // leave a little air
-    const leap = mrand();
-    deg += leap < 0.42 ? 1 : leap < 0.62 ? -1 : leap < 0.78 ? 2 : leap < 0.9 ? -2 : 0;
-    if (deg > 11) deg -= 7;
-    if (deg < -3) deg += 7;
-    const oct = deg >= 7 ? 12 : deg < 0 ? -12 : 0;
-    const n = root + 12 + scale[((deg % 7) + 7) % 7] + oct;
-    const dur = (i === 5 ? eighth * 1.4 : eighth * 0.85);
-    blip(midiHz(n), t0 + i * eighth, dur, 'square', 0.11);
-    // a thin harmony a third above on the strong beats
-    if (i === 0 || i === 3){
-      const h = root + 12 + scale[((deg + 2) % 7 + 7) % 7] + oct;
-      blip(midiHz(h), t0 + i * eighth, dur * 0.8, 'square', 0.05, 6);
+    // the very last bar resolves to the tonic
+    if (pos === 7 && i >= 4) sd = 0;
+    const oct = Math.floor(sd / 7);
+    const n = tonic + 12 + MODE[((sd % 7) + 7) % 7] + oct * 12;
+    const dur = (i === 5 || (pos === 7 && i >= 4)) ? eighth * 1.5 : eighth * 0.9;
+    blip(midiHz(n), t0 + i * eighth, dur, 'square', 0.115);
+    if (i === 0 || i === 3){                  // a third above on the strong beats
+      const h = tonic + 12 + MODE[((sd + 2) % 7 + 7) % 7] + oct * 12;
+      blip(midiHz(h), t0 + i * eighth, dur * 0.85, 'square', 0.045, 7);
     }
-  }
+  });
 
   MUSIC.bar++;
   MUSIC.timer = setTimeout(musBar, barLen * 1000);
@@ -1513,7 +1546,7 @@ function musToggle(on){
     if (!MUSIC.ctx) return;
     if (MUSIC.ctx.state === 'suspended') MUSIC.ctx.resume();
     MUSIC.seedn = (Date.now() % 100000) + 1;
-    MUSIC.bar = 0;
+    MUSIC.bar = 0; MUSIC.tune = null;
     clearTimeout(MUSIC.timer);
     musBar();
   } else {
@@ -1546,21 +1579,64 @@ function sndCue(kind){
   if (!SND.on) return;
   sndInit();
   if (!SND.ctx) return;
-  const notes = { level:[523,784], hit:[180], crit:[240,360],
-                  win:[523,659,784], lose:[300,190], award:[659,988] };
-  const seq = notes[kind] || [440];
-  seq.forEach((f, i) => {
+  /* Cues are grouped by what the action MEANS, not by which button was
+     pressed: a soft blip for navigation, a firmer one for committing to
+     something, a descending pair for anything destructive, a rising figure
+     for a reward. Consistency is what makes an interface feel responsive
+     rather than merely noisy. */
+  const V = {
+    nav:    { seq:[660],            type:'sine',     vol:0.05, dur:0.13 },
+    tap:    { seq:[520],            type:'sine',     vol:0.06, dur:0.14 },
+    commit: { seq:[523, 784],       type:'square',   vol:0.07, dur:0.16 },
+    build:  { seq:[392, 523, 659],  type:'square',   vol:0.08, dur:0.18 },
+    deny:   { seq:[220, 165],       type:'triangle', vol:0.08, dur:0.20 },
+    danger: { seq:[330, 247, 165],  type:'triangle', vol:0.09, dur:0.22 },
+    level:  { seq:[523, 784],       type:'sine',     vol:0.10, dur:0.30 },
+    award:  { seq:[659, 880, 1319], type:'sine',     vol:0.10, dur:0.34 },
+    hit:    { seq:[180],            type:'triangle', vol:0.09, dur:0.16 },
+    crit:   { seq:[240, 380],       type:'triangle', vol:0.11, dur:0.22 },
+    win:    { seq:[523, 659, 784, 1047], type:'sine', vol:0.10, dur:0.34 },
+    lose:   { seq:[392, 311, 233],  type:'triangle', vol:0.09, dur:0.34 },
+  };
+  const v = V[kind] || V.tap;
+  v.seq.forEach((f, i) => {
     const o = SND.ctx.createOscillator(), g = SND.ctx.createGain();
-    o.type = kind === 'hit' || kind === 'crit' ? 'triangle' : 'sine';
+    o.type = v.type;
     o.frequency.value = f;
-    const t0 = SND.ctx.currentTime + i * 0.09;
+    const t0 = SND.ctx.currentTime + i * 0.075;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    g.gain.exponentialRampToValueAtTime(v.vol, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + v.dur);
     o.connect(g); g.connect(SND.gain);
-    o.start(t0); o.stop(t0 + 0.4);
+    o.start(t0); o.stop(t0 + v.dur + 0.02);
   });
 }
+
+/* One delegated listener rather than a call in every handler: the UI is
+   rebuilt constantly by the refresh loop, so per-element wiring would have to
+   be re-applied on every redraw and would inevitably be forgotten somewhere. */
+function sndClassify(el){
+  if (!el) return null;
+  if (el.closest('.navitem')) return 'nav';
+  // the audio toggles share .reset-link styling but are not destructive
+  if (el.closest('#music-toggle, #sound-toggle')) return 'tap';
+  if (el.closest('#do-reset, #rf-go, [data-sell], #do-sell, #do-ascend, .reset-link'))
+    return 'danger';
+  if (el.closest('[data-upgrade], [data-craft], [data-synth], #pool-up, #overclock, #downclock'))
+    return 'build';
+  if (el.closest('[data-dig], #dispatch, #capture, #take-stranger, #repel, .btn.primary'))
+    return 'commit';
+  if (el.closest('button, .pick, .wd.earned, [data-wear], summary, .dname, .away.jump'))
+    return 'tap';
+  return null;
+}
+document.addEventListener('click', (e) => {
+  const kind = sndClassify(e.target);
+  if (kind) sndCue(kind);
+}, true);
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.tagName === 'SELECT') sndCue('commit');
+}, true);
 
 function sndToggle(on){
   SND.on = on;

@@ -104,10 +104,6 @@ def _migrate_7_to_8(c: sqlite3.Connection):
 
 
 def _migrate_8_to_9(c: sqlite3.Connection):
-    """v0.11 -> v0.12: the sigils table (created by init_db)."""
-
-
-def _migrate_8_to_9(c: sqlite3.Connection):
     """v0.11 -> v0.12.1: the glyphs table (created by init_db)."""
 
 
@@ -136,9 +132,7 @@ MIGRATIONS = {
     8: _migrate_8_to_9,
     9: _migrate_9_to_10,
     10: _migrate_10_to_11,
-    8: _migrate_8_to_9,
-    9: _migrate_9_to_10,
-    # 10: _migrate_10_to_11, <- next schema change goes here
+    # 11: _migrate_11_to_12, <- next schema change goes here
 }
 
 
