@@ -28,9 +28,17 @@ SIGNAL_THRESHOLD = 24.0          # harvester-hours (scaled) to draw the Null
 INCURSION_MIN_H = float(os.environ.get("AETHER_INCURSION_MIN_H", "12"))
 INCURSION_MAX_H = float(os.environ.get("AETHER_INCURSION_MAX_H", "24"))
 
-TIER_STAT_MULT = 1.6             # enemy base-stat multiplier per tier
-TIER_YIELD_MULT = 2.0            # loot & harvest multiplier per tier
-TIER_XP_MULT = 1.5
+# Overclock scaling. These three decide whether pushing a rift up a tier is a
+# real trade or free money, so they are knobs: the simulator can only A/B a
+# constant that reaches it through the environment.
+#
+# Note the shapes have to be read together. Yields at 2.0^tier against enemies
+# at 1.6^tier means every tier pays 1.25x more than it costs in difficulty, and
+# that gap compounds — see the tier-scaling entry under Known open items in
+# PROJECT.md.
+TIER_STAT_MULT = float(os.environ.get("AETHER_TIER_STAT", "1.6"))    # enemy base stats per tier
+TIER_YIELD_MULT = float(os.environ.get("AETHER_TIER_YIELD", "2.0"))  # loot & harvest per tier
+TIER_XP_MULT = float(os.environ.get("AETHER_TIER_XP", "1.5"))
 WARD_YIELD_BONUS = 0.10          # +10% yields per ward
 
 

@@ -201,6 +201,7 @@ class Sim:
             "days": round(self.clock.elapsed_days, 3),
             "hours": round(self.clock.elapsed_hours, 2),
             "resources": {k: round(v, 1) for k, v in self.db.res_all().items()},
+            "layers_cleared": self.db.total_layers_cleared(),
             "roster": len(roster),
             "best_power": powers[0] if powers else 0,
             "party_power": sum(powers[:3]),
@@ -237,9 +238,17 @@ class Sim:
                     blocked_by[res] = blocked_by.get(res, 0) + 1
 
         # --- what's unbeatable, and by how much
+        # Measure the party the player can actually field. Battles BORROW a
+        # daemon: harvesters and trainees step away for a fight and go back to
+        # work after, and only an expedition puts one out of reach — see
+        # app._guard_can_fight and agent._party, which both say exactly this.
+        # Counting only IDLE daemons scored a party nobody would ever send:
+        # a well-run save keeps everyone employed, so the "party" was whatever
+        # was left over, usually one daemon or none. That reported 0% odds on
+        # every rift forever and tripped the "hard wall" verdict permanently,
+        # regardless of how healthy the economy actually was.
         party = [d for d in sorted(self.db.list_daemons(), key=lambda x: -x.power())
-                 if not (self.db.get_expedition(d.id) or self.db.get_harvest(d.id)
-                         or self.db.get_training(d.id))][:3]
+                 if not self.db.get_expedition(d.id)][:3]
         frontier = {}
         for dev in self.db.list_devices():
             mac = dev["mac"]

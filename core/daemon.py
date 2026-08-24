@@ -48,6 +48,13 @@ ASCEND_LEVEL = int(os.environ.get("AETHER_ASCEND_LEVEL", "60"))
 ASCEND_CORE_BASE = float(os.environ.get("AETHER_ASCEND_CORES", "6"))
 ASCEND_RARITY_RANKS = (3, 6)
 
+# Stats are written to SQLite INTEGER columns and rendered by a JS frontend,
+# so anything past 2^53-1 either overflows the column or silently loses
+# integer precision in the browser. Nothing legitimate comes close; this is a
+# backstop so a future runaway degrades into absurd-but-alive numbers instead
+# of killing the background ticker mid-tick.
+MAX_STAT = 2 ** 53 - 1
+
 # Manual training is intentionally weak — see Daemon.train
 TRAIN_ENERGY_FLOOR = 40      # must be well rested to hand-train at all
 TRAIN_ENERGY_COST = 35       # ~4 hours of idle recovery per click
@@ -137,7 +144,7 @@ class Daemon:
             val *= 0.9 + self.care["happiness"] / 400.0
         if key == "def":
             val *= 0.9 + self.care["discipline"] / 400.0
-        return max(1, int(round(val)))
+        return max(1, min(MAX_STAT, int(round(val))))
 
     def battle_stats(self) -> dict:
         return {k: self.stat(k) for k in STAT_KEYS}

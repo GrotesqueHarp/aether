@@ -23,7 +23,7 @@ import os
 import time
 
 from . import db
-from .daemon import Daemon, STAT_KEYS
+from .daemon import Daemon, STAT_KEYS, MAX_STAT
 
 TRAIN_MULT = float(os.environ.get("AETHER_TRAIN_MULT", "1.0"))
 
@@ -410,6 +410,14 @@ def tick_training(now: float | None = None):
         banked = t["banked"] + rate * hours
         whole = int(banked)
         if whole > 0:
+            # Clamp to a stat ceiling. hall_levels_per_day is exponential in
+            # hall level (1.28^lvl), so a runaway elsewhere in the economy can
+            # drive `whole` past SQLite's 64-bit INTEGER and raise OverflowError
+            # right here — inside the background ticker, which takes the whole
+            # world down with it. Better an absurd number than a dead ticker.
+            headroom = MAX_STAT - d.base_stats[hall["stat"]]
+            whole = max(0, min(whole, headroom))
+        if whole > 0:
             d.base_stats[hall["stat"]] += whole
             d.trained[hall["stat"]] = d.trained.get(hall["stat"], 0) + whole
             d.care["discipline"] = min(100, d.care["discipline"] + whole * 0.8)
@@ -417,7 +425,7 @@ def tick_training(now: float | None = None):
         d.care["hunger"] = max(0, d.care["hunger"] - 1.5 * hours)
         db.save_daemon(d)
         db.update_training(d.id, last_tick=now, banked=banked - whole,
-                          gained=t["gained"] + whole)
+                          gained=min(MAX_STAT, t["gained"] + whole))
 
 
 # ------------------------------------------------- automation drift effects --
