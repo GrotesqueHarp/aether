@@ -165,6 +165,8 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 .jrow.k-exped_win,.jrow.k-exped_boss,.jrow.k-exped_done,.jrow.k-boss{border-left-color:var(--online)}
 .jrow.k-exped_routed,.jrow.k-care_warn{border-left-color:var(--danger)}
 .jrow.k-exped_start,.jrow.k-exped_recall{border-left-color:var(--aether)}
+/* the summary of a whole expedition, not one moment of it — reads as a header */
+.jrow.k-exped_report{border-left-color:var(--warn)}
 .jrow.k-rift_found,.jrow.k-capture,.jrow.k-hatch,.jrow.k-evolve{border-left-color:var(--warn)}
 
 /* ---- expedition badge ---- */
@@ -1337,9 +1339,43 @@ async function pulseView(){
   $('#main').innerHTML=`
     <div class="topbar"><div><div class="eyebrow">The living world</div><h1>Pulse</h1></div>
     <button class="btn ghost" id="refresh">Refresh</button></div>
+    <div id="exp-reports"></div>
     <div class="journal" id="journal"><div class="spin"></div></div>`;
-  $('#refresh').onclick=loadJournal;
+  $('#refresh').onclick=()=>{loadJournal();loadExpReports();};
   loadJournal();
+  loadExpReports();
+}
+
+/* Expeditions run for hours while you're away; the Pulse records each fight
+   as it happens, which is a log, not an account. This is the account. */
+const EXP_ENDING={done:'bottomed out',routed:'routed',recall:'recalled',gone:'lost'};
+async function loadExpReports(){
+  const box=$('#exp-reports'); if(!box) return;
+  let r; try{ r=await api('/api/expedition/reports?limit=6'); }catch(e){ return; }
+  const rs=(r&&r.reports)||[];
+  if(!rs.length){box.innerHTML='';return;}
+  box.innerHTML=`<div class="section-title">Expedition reports</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">`
+    + rs.map(x=>{
+      const mins=Math.max(0,(x.finished-x.started)/60);
+      const dur=mins<90?`${Math.round(mins)}m`:mins<2880?`${(mins/60).toFixed(1)}h`:`${(mins/1440).toFixed(1)}d`;
+      const stat=(label,val)=>val?`<div><span class="muted">${label}</span> <b>${val}</b></div>`:'';
+      const loot=Object.entries(x.loot||{}).map(([k,v])=>`${(+v).toFixed(0)} ${k.replace('essence.','')}`).join(', ');
+      return `<div class="card" data-exp-report="${x.daemon_id}">
+        <div class="fhead"><h3>${x.daemon||'—'}</h3>
+          <span class="flevel">${EXP_ENDING[x.reason]||x.reason}</span></div>
+        <div class="fdesc">${x.world||''} · ${x.orders} · ${dur}</div>
+        <div class="mono" style="font-size:11px;display:grid;gap:2px;margin-top:6px">
+          ${stat('layers',x.layers?`${x.layers} (to ${x.end_layer})`:'')}
+          ${stat('record',x.won||x.lost?`${x.won}W${x.lost?'/'+x.lost+'L':''}`:'')}
+          ${stat('gatekeepers',x.bosses)}
+          ${stat('xp',x.xp?`+${x.xp}${x.levels?` · ${x.levels} lvl`:''}`:'')}
+          ${stat('mastery',x.mastery?`+${x.mastery}`:'')}
+          ${stat('scouted',x.scouted)}
+          ${stat('carried',loot)}
+          ${stat('rested',x.rested)}
+        </div></div>`;
+    }).join('')+`</div>`;
 }
 async function loadJournal(){
   const r=await api('/api/journal?limit=80');

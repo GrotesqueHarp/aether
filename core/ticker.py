@@ -228,6 +228,8 @@ def tick_expeditions(now: float | None = None):
         d = db.get_daemon(ex["daemon_id"])
         if not d:
             db.end_expedition(ex["daemon_id"])
+            from . import expedition as expedition_mod
+            expedition_mod.finish(ex["daemon_id"], "gone", mac=ex["mac"])
             continue
         _expedition_step(d, ex, now)
 
@@ -236,10 +238,13 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
     mac = ex["mac"]
     db.update_expedition(d.id, last_tick=now)
 
+    from . import expedition as expedition_mod
+
     # exhausted? rest this tick instead of fighting
     if d.care["energy"] < 15:
         d.care["energy"] = min(100, d.care["energy"] + 14)
         db.save_daemon(d)
+        expedition_mod.note(d.id, rested=1)
         return
 
     rift = generate_rift(mac)
@@ -251,6 +256,7 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
                      f"{d.name} returns from {rift['world_name']} — the shaft "
                      f"bottoms out at layer {LAYERS}. It looks proud of itself.",
                      mac=mac, daemon_id=d.id)
+        expedition_mod.finish(d.id, "done", d.name, rift["world_name"], mac)
         return
 
     from .world import layer_spec, layer_enemies
@@ -260,7 +266,9 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
     if orders == "scout":
         # no fighting: reads the ground ahead and learns the rift instead
         from . import mastery
-        db.add_mastery_xp(mac, mastery.xp_for_clear(prog["cleared"] + 1, False) * 0.8)
+        mxp = mastery.xp_for_clear(prog["cleared"] + 1, False) * 0.8
+        db.add_mastery_xp(mac, mxp)
+        expedition_mod.note(d.id, scouted=1, mastery=mxp)
         d.care["energy"] = max(0, d.care["energy"] - 3)
         db.save_daemon(d)
         if ex["fights"] % 6 == 0:
@@ -299,6 +307,8 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
             from . import economy
             loot = economy.node_loot(rift, layer, dim, prog)
             economy.grant(loot)
+            expedition_mod.note(d.id, won=1, xp=xp, levels=ev["levels"],
+                                layer=layer, loot=loot)
             db.save_daemon(d)
             db.add_event("exped_farm",
                          f"{d.name} works layer {layer} of {rift['world_name']} "
@@ -311,7 +321,11 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         prog_now = db.get_progress(mac)
         db.set_progress(mac, layer, layer >= LAYERS)
         db.bump_layers_dug(2 if mastery.has(prog_now.get("mastery_xp", 0), "mastered") else 1)
-        db.add_mastery_xp(mac, mastery.xp_for_clear(layer, layer % 25 == 0))
+        mxp = mastery.xp_for_clear(layer, layer % 25 == 0)
+        db.add_mastery_xp(mac, mxp)
+        expedition_mod.note(d.id, won=1, layers=1, layer=layer, xp=xp,
+                            levels=ev["levels"], bosses=1 if boss else 0,
+                            mastery=mxp)
         if layer > d.deepest_layer:
             d.deepest_layer = layer
         lvl_txt = f" It reached Lv{d.level}!" if ev["levels"] else ""
@@ -335,6 +349,8 @@ def _expedition_step(d: Daemon, ex: dict, now: float):
         db.add_event("exped_routed",
                      f"{d.name} was routed by {enemy.name} in {rift['world_name']} "
                      f"and limps home to the Nest.", mac=mac, daemon_id=d.id)
+        expedition_mod.note(d.id, lost=1)
+        expedition_mod.finish(d.id, "routed", d.name, rift["world_name"], mac)
     db.save_daemon(d)
 
 

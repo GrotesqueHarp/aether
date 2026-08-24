@@ -28,6 +28,34 @@ own history.
 Time-based awards always carry a second condition. "Day 365" alone would dump
 a year of backlogged rewards on someone who discovers the game late, cheapening
 all of them at once; "365 days AND a thousand layers" reads as endurance.
+
+ON THE LAYER NUMBERS
+--------------------
+They were guessed, and the guess was wrong by an order of magnitude. Measured
+over a 400-day simulated run at a normal pace (3 sessions/day), lifetime layers
+land at:
+
+    day   8 ->   100     day 180 ->   978
+    day  30 ->   266     day 270 -> 1,302
+    day  90 ->   413     day 365 -> 1,334
+    day 120 ->   500     day 400 -> 1,517      (~1,385 layers/year sustained)
+
+Against that curve the old thresholds were not merely slow, they were
+unreachable: Shaftlight (2,000), Ferrous (5,000) and The Deep (25,000) are
+never earned, and — worse, because it is silent — the *layer* halves of Slow
+Water (2,000), The Long Dark (4,000) and Year One (10,000) never land either,
+so those awards fire never rather than late no matter how patient you are. The
+Deep at 25,000 was roughly eighteen years.
+
+The numbers below are read off that curve, keeping the shape the tiers ask
+for: trinkets in months, the landmark in years. Shaftlight ~8 months, Ferrous
+~1.4 years, The Deep ~3 years. The time-axis layer floors are set just under
+what a normal pace actually reaches by their day, which restores the DAY as
+the binding condition — the point of a patience award — while still refusing
+to pay out on an install that has done nothing.
+
+Re-measure before touching these again: `layers_cleared` is in the simulator
+snapshots for exactly this, and instinct has already been wrong here once.
 """
 
 from __future__ import annotations
@@ -49,13 +77,13 @@ AWARDS = [
      "need": {"layers": 500}},
     {"key": "shaftlight", "tier": TRINKET, "kind": "decor",
      "name": "Shaftlight", "detail": "light from somewhere far above",
-     "need": {"layers": 2000}},
+     "need": {"layers": 1200}},
     {"key": "ferrous", "tier": TRINKET, "kind": "theme",
      "name": "Ferrous", "detail": "iron and rust",
-     "need": {"layers": 5000}},
+     "need": {"layers": 2000}},
     {"key": "the_deep", "tier": LANDMARK, "kind": "environment",
      "name": "The Deep", "detail": "the tank becomes an abyss",
-     "need": {"layers": 25000}},
+     "need": {"layers": 4000}},
 
     # -------------------------------------------------------------- breadth --
     {"key": "cartographer", "tier": TRINKET, "kind": "title",
@@ -73,17 +101,17 @@ AWARDS = [
 
     # ----------------------------------------------------------------- time --
     {"key": "patient", "tier": TRINKET, "kind": "title",
-     "name": "The Patient", "detail": "30 days, and 500 layers",
-     "need": {"days": 30, "layers": 500}},
+     "name": "The Patient", "detail": "30 days, and 250 layers",
+     "need": {"days": 30, "layers": 250}},
     {"key": "slow_water", "tier": TRINKET, "kind": "decor",
      "name": "Slow Water", "detail": "drifting motes that were always there",
-     "need": {"days": 90, "layers": 2000}},
+     "need": {"days": 90, "layers": 400}},
     {"key": "long_dark", "tier": TRINKET, "kind": "theme",
      "name": "The Long Dark", "detail": "near-black, for a room at night",
-     "need": {"days": 180, "layers": 4000}},
+     "need": {"days": 180, "layers": 900}},
     {"key": "year_one", "tier": LANDMARK, "kind": "theme",
      "name": "Year One", "detail": "gold on deep blue — a year of running",
-     "need": {"days": 365, "layers": 10000}},
+     "need": {"days": 365, "layers": 1300}},
 
     # ----------------------------------------------------------------- care --
     {"key": "keeper", "tier": TRINKET, "kind": "title",
