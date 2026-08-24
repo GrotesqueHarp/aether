@@ -438,6 +438,8 @@ def _run():
             sample_history(now)
             from . import awards
             awards.evaluate()
+            from . import updates
+            updates.maybe_check(now)      # no-op unless opted in; rate-limited
             if now - last_presence > PRESENCE_EVERY:
                 pass          # presence policing retired in v0.9
                 last_presence = now

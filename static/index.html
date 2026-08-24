@@ -223,6 +223,10 @@ h1,h2,h3{font-family:var(--display);font-weight:600;margin:0}
 canvas.flow{width:100%;height:34px;border-radius:5px;display:block;margin:5px 0 3px}
 
 .cl-dot{width:7px;height:7px;border-radius:50%;background:var(--warn);margin-left:7px;display:inline-block}
+/* an update waiting is news, not a warning — same dot the changelog uses */
+.reset-link.has-update{color:var(--warn);opacity:1}
+.reset-link.has-update::after{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--warn);margin-left:6px;display:inline-block;vertical-align:middle}
 .clrel.cur{border-color:var(--aether)}
 .clhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .clhead h3{font-size:17px}
@@ -492,6 +496,7 @@ body.dashmode .main{padding:0}
       <div class="reset-link" id="music-toggle" onclick="musToggle(!MUSIC.on);this.textContent=(MUSIC.on?'Music on':'Music off')">Music off</div>
       <div class="reset-link" id="sound-toggle" onclick="sndToggle(!SND.on);this.textContent=(SND.on?'Effects on':'Effects off')">Effects off</div>
       <div class="reset-link" onclick="confirmReset()">Reset progression</div>
+      <div class="reset-link" id="update-link" onclick="openUpdate()">Updates</div>
     </div>
   </nav>
   <div style="display:flex;flex-direction:column;min-width:0">
@@ -662,6 +667,7 @@ async function boot(){
   await loadCosmetics();
   checkChangelog();
   checkHomecoming();
+  refreshUpdateDot();          // cheap and local; the network check is opt-in
   $('#foot-net').textContent=(st.local_ip||'')+(st.subnet? '\n'+st.subnet:'');
   const foot=document.querySelector('.rail .foot');
   if(foot&&st.version)foot.insertAdjacentHTML('beforeend',`<div class="mono" style="color:var(--dim)">v${st.version}</div>`);
@@ -3367,6 +3373,100 @@ function confirmReset(){
     state.party=[]; state.currentRift=null;
     if(scope!=='rifts') state.devices=(scope==='everything')?[]:state.devices;
     await boot();
+  };
+}
+
+/* -- updates: check is opt-in, applying is done by a helper on the host -- */
+function updAgo(ts){
+  if(!ts) return 'never';
+  const s=Math.max(0,Date.now()/1000-ts);
+  if(s<90) return 'just now';
+  if(s<5400) return Math.round(s/60)+'m ago';
+  if(s<172800) return Math.round(s/3600)+'h ago';
+  return Math.round(s/86400)+'d ago';
+}
+
+async function refreshUpdateDot(){
+  try{
+    const u=await api('/api/update');
+    state.update=u;
+    const link=$('#update-link');
+    if(!link) return;
+    link.textContent = u.available ? `Updates · v${u.latest}` : 'Updates';
+    link.classList.toggle('has-update', !!u.available);
+  }catch(e){/* never let a version check break the page */}
+}
+
+async function openUpdate(){
+  const u=state.update||await api('/api/update').catch(()=>null)||{};
+  const helper={
+    absent:['not detected','var(--warn)'],
+    idle:['ready','var(--ok,#8FD6B4)'],
+    working:['applying an update…','var(--warn)'],
+  }[u.helper]||['unknown','var(--dim)'];
+  const last=u.last_run&&u.last_run.message
+    ? `<div class="mono muted" style="font-size:11px;margin-top:8px">last run: ${u.last_run.message}</div>` : '';
+
+  modal(`<div class="card" style="padding:22px;max-width:520px">
+    <h2 style="font-size:19px;margin-bottom:6px">Updates</h2>
+    <div class="muted" style="font-size:12.5px;margin-bottom:14px">
+      This instance is running <b class="mono">v${u.current||'?'}</b>.
+      ${u.available?`<span style="color:var(--warn)">v${u.latest} is available.</span>`
+                   :u.check_enabled?'No newer version seen.':''}
+    </div>
+
+    <label class="rscope" style="align-items:flex-start">
+      <input type="checkbox" id="upd-enabled" ${u.check_enabled?'checked':''}>
+      <span><b>Check github.com for new versions</b><br><span class="muted">
+        Off by default. AETHER is built to run air-gapped, so it never reaches
+        the network unless you ask it to. The check sends nothing about your
+        save, your devices or you — it reads one line of text and compares it
+        to your version. Checked ${updAgo(u.checked_at)}.
+        ${u.check_error?`<br><span style="color:var(--warn)">last check failed: ${u.check_error}</span>`:''}
+      </span></span></label>
+
+    <div class="mono muted" style="font-size:11px;margin-top:14px">
+      host helper: <span style="color:${helper[1]}">${helper[0]}</span>
+    </div>
+    ${u.helper==='absent'?`<div class="muted" style="font-size:12px;margin-top:6px">
+      AETHER runs in a container with no access to git or Docker — on purpose,
+      since the API has no authentication. Updates are applied by a small
+      helper on the host. Install it with
+      <span class="mono">tools/aether-update.timer</span> (see the README) and
+      this button becomes live.</div>`:''}
+    ${last}
+
+    <div style="display:flex;gap:9px;margin-top:16px">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn" id="upd-check" ${u.check_enabled?'':'disabled'}>Check now</button>
+      <button class="btn" id="upd-apply" ${(u.helper==='idle'&&u.available)?'':'disabled'}
+        title="${u.helper!=='idle'?'needs the host helper':(u.available?'':'already up to date')}"
+        >Update &amp; restart</button>
+    </div></div>`);
+
+  $('#upd-enabled').onchange=async(e)=>{
+    const r=await api('/api/update/setting',{method:'POST',
+      body:JSON.stringify({enabled:e.target.checked})});
+    state.update=r; closeModal(); openUpdate(); refreshUpdateDot();
+  };
+  $('#upd-check').onclick=async()=>{
+    const r=await api('/api/update/check',{method:'POST',body:'{}'});
+    state.update=r;
+    toast(r.ok?(r.available?`v${r.latest} available`:'up to date')
+              :r.reason==='unreachable'?'Could not reach github.com':'Check failed');
+    closeModal(); openUpdate(); refreshUpdateDot();
+  };
+  $('#upd-apply').onclick=async()=>{
+    const r=await api('/api/update/apply',{method:'POST',
+      body:JSON.stringify({confirm:'UPDATE'})});
+    if(!r.ok){
+      toast({helper_absent:'No host helper is listening',
+             already_running:'An update is already running',
+             already_requested:'Update already requested'}[r.reason]||'Could not request update');
+      return;
+    }
+    closeModal();
+    toast('Update requested — AETHER will restart shortly');
   };
 }
 
