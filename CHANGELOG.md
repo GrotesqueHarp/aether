@@ -15,6 +15,49 @@ back.
 
 ## [Unreleased]
 
+### Changed
+- **Award layer thresholds are measured now, not guessed** — and the guess was
+  wrong by an order of magnitude. Over a 400-day simulated run at a normal
+  pace, lifetime layers reach 100 by day 8, 500 by day 120, 1,000 by day 198
+  and 1,517 by day 400 (~1,385/year sustained). Against that curve `Shaftlight`
+  (2,000), `Ferrous` (5,000) and `The Deep` (25,000 — roughly *eighteen years*)
+  were never earned at all.
+
+  Worse, and silently: the *layer* halves of `Slow Water`, `The Long Dark` and
+  `Year One` never landed either, so three time awards fired never rather than
+  late no matter how patient you were. Their floors are now set just under what
+  a normal pace actually reaches by their day, which restores the DAY as the
+  binding condition — the entire point of a patience award — while still
+  refusing to pay out on an install that has done nothing.
+
+      Shaftlight     2,000 -> 1,200 layers    (~8 months)
+      Ferrous        5,000 -> 2,000           (~1.6 years)
+      The Deep      25,000 -> 4,000           (~3.9 years)
+      The Patient   30d + 500 -> 30d + 250
+      Slow Water    90d + 2,000 -> 90d + 400
+      The Long Dark 180d + 4,000 -> 180d + 900
+      Year One      365d + 10,000 -> 365d + 1,300
+
+  `Layerbreaker` (100) and `Deep Current` (500) were already about right and
+  are unchanged. The curve they were all read off is recorded in the header of
+  `core/awards.py`, along with a note to re-measure rather than re-guess.
+
+### Added
+- **Expedition reports.** An expedition runs for hours while you are away and
+  left only a trail of individual Pulse lines — one per fight, scattered among
+  everything else the world was doing. Reading back through forty of those to
+  work out whether the trip was worth it is not reading a report, it is doing
+  forensics. Each expedition now keeps a running tally, and when it ends —
+  bottomed out, routed, or recalled — that becomes one account: layers dug and
+  where it got to, its record, Gatekeepers felled, XP and levels, mastery,
+  anything carried home, and how it ended. It appears as a summary line in the
+  Pulse and as a card at the top of that view, with the last 20 kept.
+
+  Reports are written on *every* ending, including routed and recalled — those
+  are the ones you most want to read. The tally lives in `meta`, so this needed
+  no migration; an expedition already in flight when you upgrade still ends
+  cleanly, just without a report.
+
 ### Fixed
 - **A one-fight party bonus was being written permanently into stored stats,
   and compounded on every battle.** `synergy.apply()` promises "combat-ready

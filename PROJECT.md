@@ -109,7 +109,8 @@ tools/audit.py      full-stack verification (see below)
 | **Rift Mastery** | Per-rift 1–99 plus global Resonance, which rewards *breadth*. |
 | **Reformat** | Global prestige. Never required. |
 | **Traits / affinity / synergy** | Make daemons individuals and party-building a decision. |
-| **Awards / Wardrobe** | The long-run reward curve: themes, environments, decorations, adornments, titles. |
+| **Awards / Wardrobe** | The long-run reward curve: themes, environments, decorations, adornments, titles. Thresholds are measured, not guessed — see the header of `core/awards.py`. |
+| **Expedition reports** | An expedition ends with one account of the whole trip, not just the trail of per-fight Pulse lines it left behind. |
 
 ---
 
@@ -187,13 +188,17 @@ system.
 
 **Known open items:**
 
-- **Award thresholds need retuning** against the measured curve, and it is
-  worse than "a steeper curve than exists". Measured over a 400-day `normal`
-  run (3 sessions/day): 100 layers by day 8, 500 by day 120, 1,000 by day 198,
-  1,517 by day 400 — averaging ~3.8 layers/day. `Shaftlight` (2,000),
-  `Ferrous` (5,000) and `The Deep` (25,000) are never reached, and the *layer*
-  half of `Slow Water`, `The Long Dark` and `Year One` never lands either, so
-  those fire never rather than late. The trinket tier may also be too sparse.
+- **The trinket tier may still be too sparse on the depth axis.** The
+  thresholds themselves are now measured rather than guessed (see the header
+  of `core/awards.py` for the curve they were read off), but between
+  Layerbreaker on day 8 and Deep Current on day 120 there is nothing to earn.
+  A trinket somewhere in that gap would want a new name and a new decor or
+  palette, which is a design decision, not a number.
+- **The measured curve is only for a normal pace.** Everything in
+  `core/awards.py` is read off one 400-day run at 3 sessions/day. A dedicated
+  player will reach the depth awards sooner, which is arguably correct, but
+  the fast end has never been measured cleanly — the one obsessive-pace run
+  that exists predates the synergy fix and is worthless.
 - **Per-tier scaling is asymmetric.** `TIER_YIELD_MULT` is 2.0 while
   `TIER_STAT_MULT` is 1.6 (`core/war.py`), so each Overclock tier multiplies
   your income faster than it multiplies enemy difficulty — a `1.25^tier`
@@ -215,8 +220,6 @@ system.
   how the aliasing bug was found in the CHANGELOG.*
 - **Music is structurally correct but untested by ear at length.** Tempo,
   lead/bass balance, and motif re-roll frequency are taste calls.
-- **Expedition reports** were discussed but not built — expeditions run for
-  hours and produce a single Pulse line.
 - **A daemon detail page** would help; cards are crowded with stats, care,
   traits, affinity, bonds, biography and glyphs.
 

@@ -44,6 +44,7 @@ from core import awards
 from core import events
 from core import objectives as objectives_mod
 from core import updates as updates_mod
+from core import expedition as expedition_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
 from core import world as world_mod
@@ -672,6 +673,8 @@ def expedition_start():
     if orders not in ("dig", "farm", "scout"):
         return jsonify({"error": "bad_orders"}), 400
     db.start_expedition(d.id, r["mac"], orders)
+    expedition_mod.begin(d.id, r["mac"], orders,
+                         db.get_progress(r["mac"])["cleared"])
     db.add_event("exped_start",
                  f"{d.name} sets out on an expedition into {r['world_name']}.",
                  mac=r["mac"], daemon_id=d.id)
@@ -687,10 +690,15 @@ def expedition_recall():
     if not d or not ex:
         return jsonify({"error": "not_found"}), 404
     db.end_expedition(did)
-    db.add_event("exped_recall",
-                 f"{d.name} was recalled to the Nest "
-                 f"({ex['fights']} battle(s) fought).", daemon_id=did)
-    return jsonify({"ok": True, "daemon": _daemon_payload(d)})
+    world = generate_rift(ex["mac"])["world_name"]
+    report = expedition_mod.finish(did, "recall", d.name, world, ex["mac"])
+    return jsonify({"ok": True, "daemon": _daemon_payload(d), "report": report})
+
+
+@app.route("/api/expedition/reports")
+def expedition_reports():
+    limit = min(int(request.args.get("limit", "10")), 20)
+    return jsonify({"reports": expedition_mod.recent(limit)})
 
 
 @app.route("/api/journal")
