@@ -1,0 +1,17 @@
+[Unit]
+# Host half of AETHER's in-game update button. See tools/aether-update-watch.sh
+# for why the container is not allowed to update itself.
+Description=AETHER update watcher
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Adjust if your checkout lives elsewhere.
+Environment=AETHER_REPO=/opt/aether
+ExecStart=/opt/aether/tools/aether-update-watch.sh --once
+
+# It runs docker compose, so it needs root — but it is a fixed command with no
+# input from the game. The only thing the container controls is *whether* a
+# file exists, never what gets run.
+User=root

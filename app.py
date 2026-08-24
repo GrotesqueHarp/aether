@@ -43,6 +43,7 @@ from core import reformat
 from core import awards
 from core import events
 from core import objectives as objectives_mod
+from core import updates as updates_mod
 from core.daemon import Daemon, starter_daemon
 from core.world import generate_rift
 from core import world as world_mod
@@ -1092,6 +1093,42 @@ def crucible_reclaim():
                  f"The Crucible compresses raw essence into "
                  f"{res['gained']:.0f} Core(s).")
     return jsonify(res)
+
+
+# -- updates --
+# Checking is opt-in and applying is delegated to a host-side helper; see
+# core/updates.py for why the container deliberately cannot update itself.
+@app.route("/api/update")
+def update_status():
+    return jsonify(updates_mod.snapshot())
+
+
+@app.route("/api/update/check", methods=["POST"])
+def update_check():
+    if not updates_mod.check_enabled():
+        return jsonify({"ok": False, "reason": "disabled"}), 400
+    res = updates_mod.check_now(force=True)
+    return jsonify({**res, **updates_mod.snapshot()})
+
+
+@app.route("/api/update/setting", methods=["POST"])
+def update_setting():
+    body = request.get_json(force=True)
+    updates_mod.set_check_enabled(bool(body.get("enabled")))
+    if body.get("enabled"):
+        updates_mod.check_now(force=True)      # answer the question at once
+    return jsonify(updates_mod.snapshot())
+
+
+@app.route("/api/update/apply", methods=["POST"])
+def update_apply():
+    body = request.get_json(force=True)
+    if body.get("confirm") != "UPDATE":
+        return jsonify({"ok": False, "reason": "needs_confirm"}), 400
+    res = updates_mod.request_update()
+    if not res.get("ok"):
+        return jsonify({**res, **updates_mod.snapshot()}), 400
+    return jsonify({**res, **updates_mod.snapshot()})
 
 
 # -- the bastion --

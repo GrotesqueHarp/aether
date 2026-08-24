@@ -61,6 +61,25 @@ back.
   absurd-but-alive numbers instead of stopping the world.
 
 ### Added
+- **An Updates panel**, in the sidebar under Reset. Shows the running version,
+  whether a newer one exists, and — where a host helper is installed — applies
+  it with one button.
+
+  Both halves are opt-in, for different reasons. *Checking* reads one line of
+  text (the `VERSION` file on `main`) and sends nothing about your save, your
+  devices or you; it is off by default because design constraint #5 says AETHER
+  runs air-gapped, and an install that never asked to phone home never does.
+  *Applying* is delegated to `tools/aether-update-watch.sh` on the host, driven
+  by a systemd timer: the game writes a request file onto the data volume and
+  the helper runs `update.sh`. The container has no git, no docker CLI and no
+  docker socket, and this keeps it that way — `docker-compose.yml` uses host
+  networking with no authentication on the API, so a container that could run
+  `docker compose` would be a container that could hand root on the host to
+  anything that reached port 8787. Losing a save is recoverable; that is not.
+
+  Until the helper is installed the panel reports *host helper: not detected*
+  and the button stays disabled, rather than offering a control that silently
+  does nothing.
 - `layers_cleared` in simulator snapshots. The lifetime layer counter that
   awards are gated on could not be observed over a run — snapshots carried only
   per-rift `cleared`, which resets on Overclock — so award pacing could not be

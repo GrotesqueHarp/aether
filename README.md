@@ -110,6 +110,42 @@ app stamps a `schema_version` into the DB, and `core/db.py` runs sequential
 migrations at startup — an old save from any prior release upgrades in place.
 The running version shows in the UI footer and in `/api/state`.
 
+### Updating from inside the game (optional)
+
+The Updates panel (bottom of the sidebar) can show when a new version is out
+and apply it with one click. Both halves are opt-in, for different reasons.
+
+**Checking** asks github.com for one line — the `VERSION` file on `main` — and
+compares it to yours. It sends nothing about your save, your devices or you,
+and it is **off by default**, because AETHER is built to run air-gapped and an
+install that never asked to reach the network never does. Turn it on in the
+Updates panel.
+
+**Applying** is done by a small helper on the *host*, not by the game. The
+container ships with no git, no docker CLI and no docker socket, deliberately:
+`docker-compose.yml` uses host networking and the API has no authentication,
+so a container able to run `docker compose` would be a container able to hand
+out root on this machine to anything that found port 8787. Instead the game
+writes a request file to the data volume and the helper picks it up:
+
+```bash
+sudo cp tools/aether-update.service tools/aether-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now aether-update.timer
+```
+
+Edit `AETHER_REPO` in the `.service` file if your checkout is not at
+`/opt/aether`. Check it can see everything:
+
+```bash
+tools/aether-update-watch.sh --status
+```
+
+Until the timer is installed the panel says *host helper: not detected* and
+the update button stays disabled — it will never offer a button that quietly
+does nothing. With it running, "Update & restart" runs the same `update.sh`
+you would have run over SSH, and the game restarts itself.
+
 For active development, the override file bind-mounts the source and cranks
 the world clocks:
 

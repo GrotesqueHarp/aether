@@ -1,0 +1,14 @@
+[Unit]
+Description=Poll for AETHER in-game update requests
+
+[Timer]
+# Every minute: the button should feel responsive, and a no-op run is a
+# single stat() plus a heartbeat write. The heartbeat also has to stay fresh
+# enough that the game can tell the helper is alive — see HELPER_STALE_S in
+# core/updates.py (15 minutes), so anything under that works.
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
