@@ -4,7 +4,7 @@ Read this first when picking the project up. It is the orientation document:
 what the game is, how it is built, what state it is in, and the conventions and
 hard-won lessons that should shape further work.
 
-- **Current version:** 0.25.2 · **Schema:** v11
+- **Current version:** 0.25.3 · **Schema:** v11
 - **Repo:** https://github.com/GrotesqueHarp/aether (public)
 - **Runs on:** a Debian LXC under Proxmox, via Docker, at `:8787`
 - **Scale:** ~1,250 lines of `app.py`, ~4,600 across `core/`, ~3,500 in the
@@ -187,10 +187,32 @@ system.
 
 **Known open items:**
 
-- **Award thresholds need retuning** against the measured curve. They were
-  written assuming a steeper curve than exists — `Ferrous` at 5,000 layers is
-  roughly six months at current rates, and the 25,000-layer landmark is years.
-  The trinket tier may be too sparse.
+- **Award thresholds need retuning** against the measured curve, and it is
+  worse than "a steeper curve than exists". Measured over a 400-day `normal`
+  run (3 sessions/day): 100 layers by day 8, 500 by day 120, 1,000 by day 198,
+  1,517 by day 400 — averaging ~3.8 layers/day. `Shaftlight` (2,000),
+  `Ferrous` (5,000) and `The Deep` (25,000) are never reached, and the *layer*
+  half of `Slow Water`, `The Long Dark` and `Year One` never lands either, so
+  those fire never rather than late. The trinket tier may also be too sparse.
+- **Per-tier scaling is asymmetric.** `TIER_YIELD_MULT` is 2.0 while
+  `TIER_STAT_MULT` is 1.6 (`core/war.py`), so each Overclock tier multiplies
+  your income faster than it multiplies enemy difficulty — a `1.25^tier`
+  divergence, ~87x in your favour by tier 20, which makes overclocking
+  unconditionally correct. Worth a look on its own merits, but note it is
+  *not* a runaway: an A/B at `AETHER_TIER_YIELD=1.6` left the explosion
+  described below completely unchanged. Both constants are env knobs now.
+- **Ascension is priced linearly for an exponential payoff.** `ascend_cost` is
+  `base x (rank+1)` while the stat multiplier is `1.18^rank`, so cumulative
+  cost to rank 100 is ~30k Cores for ~15,000,000x power. Diverges on its own
+  terms and is worth fixing — but it was *not* the cause of the explosion
+  either (changing it left the day-41 figure bit-identical).
+
+  *Both of the above were wrong guesses at the stat explosion, kept here
+  because each is a real imbalance in its own right. The actual cause was the
+  synergy aliasing bug, found only by dumping daemon state day by day through
+  the window rather than by reading code that looked suspicious. When a number
+  misbehaves here, instrument before theorising — see `sim/` and the note on
+  how the aliasing bug was found in the CHANGELOG.*
 - **Music is structurally correct but untested by ear at length.** Tempo,
   lead/bass balance, and motif re-roll frequency are taste calls.
 - **Expedition reports** were discussed but not built — expeditions run for

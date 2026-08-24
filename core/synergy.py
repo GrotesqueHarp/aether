@@ -66,11 +66,19 @@ def apply(party: list) -> tuple[list, list[dict]]:
 
     Clones rather than mutating, so a bonus earned for one fight can never be
     written back into a daemon's stored stats.
+
+    ALWAYS clones, including when nothing applies. Returning the originals on
+    the empty case looked like a free shortcut — no synergy, nothing to bake
+    in, so why copy — but callers take this contract at its word and keep
+    multiplying. app.py folds the party bond bonus into `fighters` and then
+    saves `party`, so on any fight with no active synergy the two were the
+    same objects: a one-fight buff got written permanently into stored base
+    stats, and compounded on every battle after. A +5% bond over 200 fights
+    turns 19 ATK into 328,559. Copying an unboosted party is cheap; this is
+    not.
     """
     from .daemon import Daemon
     active = evaluate(party)
-    if not active:
-        return party, []
     boosted = []
     for d in party:
         c = Daemon.from_dict(d.to_dict())

@@ -15,8 +15,58 @@ back.
 
 ## [Unreleased]
 
+### Fixed
+- **A one-fight party bonus was being written permanently into stored stats,
+  and compounded on every battle.** `synergy.apply()` promises "combat-ready
+  clones ... so a bonus earned for one fight can never be written back", but
+  short-circuited with `return party, []` when no synergy was active — handing
+  back the originals. `app.py` takes that contract at its word: it folds the
+  party bond bonus into `fighters` and then saves `party`. With no active
+  synergy those were the same objects, so every such fight multiplied the
+  party's base stats and persisted them. A +5% bond over 200 fights turns 19
+  ATK into 328,559. In a simulated intensive save, party power went 3,606 on
+  day 38 to 149,823 on day 39 and 17,252,674 by day 42, with frontier odds
+  pinned at 100% and every award threshold falling trivially. `apply()` now
+  always clones. Note the trigger is the *absence* of a synergy, so the more
+  ordinary your party, the worse it got.
+
+  Found by dumping full daemon state day by day across the window: base stats
+  exploded while `trained`, `level` and `ascensions` barely moved, which ruled
+  out training, levelling and prestige in one look. Three prior theories drawn
+  from plausible-looking code (ascension pricing, tier yields, the hall curve)
+  were each disproven by A/B — the day-41 figure came back bit-identical every
+  time.
+- **The simulator's frontier diagnostic scored a party no player would ever
+  field.** `Sim._diagnose` built its party from *idle* daemons only, excluding
+  harvesters and trainees — but battles borrow those back, as both
+  `app._guard_can_fight` and `agent._party` say in as many words, and a
+  well-run save keeps everyone employed. It was therefore scoring the
+  leftovers, usually a single daemon. `best_frontier` read 0.00 on every rift
+  forever, and every stall came back `hard wall: best frontier only 0%`
+  regardless of how healthy the economy was. Measured on one mid-game save:
+  0.00 for the idle-only party against 0.27 for the party the agent actually
+  fights with. The same save now reports `economy-bound: bits blocks
+  purchases; combat winnable at 43%` — a different diagnosis entirely. The
+  shipped game had already learned this lesson once (see the note on
+  `_guard_can_fight` about parties never forming); the simulator quietly
+  reintroduced it in the measurement layer. **Any pacing conclusion drawn from
+  stall verdicts before this is suspect and worth re-checking.**
+- **A runaway stat could kill the background ticker.** `tick_training` wrote
+  `gained` straight to a SQLite INTEGER column, so a large enough value raised
+  `OverflowError: Python int too large to convert to SQLite INTEGER` inside the
+  ticker thread — the thread that advances the entire world. A simulated
+  intensive player hit it on day 137. Base-stat growth and derived stats now
+  clamp to `MAX_STAT` (2^53-1, which is also the largest integer the JS
+  frontend can render without losing precision), so a runaway degrades into
+  absurd-but-alive numbers instead of stopping the world.
+
 ### Added
-- Retune award thresholds against the measured curve.
+- `layers_cleared` in simulator snapshots. The lifetime layer counter that
+  awards are gated on could not be observed over a run — snapshots carried only
+  per-rift `cleared`, which resets on Overclock — so award pacing could not be
+  measured at all.
+- Retune award thresholds against the measured curve. Now measured: see the
+  numbers under Known open items in PROJECT.md.
 
 *(Prestige, the simulator's awareness of it, and Reformat all shipped in
 0.12-0.17; this list had gone stale.)*
